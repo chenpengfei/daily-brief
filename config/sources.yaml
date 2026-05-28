@@ -1,0 +1,20 @@
+# Source Registry for Daily Brief.
+#
+# Each Source has:
+# - id: stable unique identifier
+# - platform: content platform, such as x, blog, github, or youtube
+# - adapter: logical Fetch Adapter name
+# - target: adapter-specific locator or query
+# - enabled: collection switch
+# - notes: human-readable reason for including the Source
+#
+# Example:
+# sources:
+#   - id: github-agent-trending
+#     platform: github
+#     adapter: github-search
+#     target: "topic:ai-agent stars:>1000"
+#     enabled: true
+#     notes: Agent-related GitHub projects gaining attention
+
+sources: []

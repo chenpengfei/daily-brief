@@ -1,0 +1,30 @@
+# macOS / editor noise
+.DS_Store
+*.swp
+*.swo
+
+# Node / TypeScript dependencies and outputs
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and local runtime state
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Temporary agent scratch space
+.scratch/
+
+# Machine-readable collection working data; keep directory skeletons tracked.
+data/source-items/**/*.jsonl
+!data/source-items/.gitkeep
