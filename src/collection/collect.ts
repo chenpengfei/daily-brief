@@ -68,7 +68,7 @@ export async function collectSources(options: CollectSourcesOptions = {}): Promi
     }
 
     try {
-      const items = await adapter.fetch(source, { fetchedAt });
+      const items = await adapter.fetch(source, { fetchedAt, collectionDate: date });
       const appendResult = await appendSourceItems(items, date, options.sourceItemRoot);
       storePath = appendResult.path;
       results.push({

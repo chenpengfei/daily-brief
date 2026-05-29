@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { deliverOnce, generateOnce, runOnce } from "./agent/index.js";
 import { collectSources } from "./collection/index.js";
@@ -140,9 +141,75 @@ function optionsFromEnv(env: CliEnv) {
   };
 }
 
+export async function loadDotenvFile(path = ".env", env: CliEnv = process.env): Promise<void> {
+  let contents: string;
+
+  try {
+    contents = await readFile(path, "utf8");
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return;
+    }
+
+    throw error;
+  }
+
+  for (const line of contents.split("\n")) {
+    const entry = parseDotenvLine(line);
+
+    if (!entry || env[entry.key] !== undefined) {
+      continue;
+    }
+
+    env[entry.key] = entry.value;
+  }
+}
+
+function parseDotenvLine(line: string): { key: string; value: string } | undefined {
+  const trimmed = line.trim();
+
+  if (trimmed.length === 0 || trimmed.startsWith("#")) {
+    return undefined;
+  }
+
+  const equalsIndex = trimmed.indexOf("=");
+
+  if (equalsIndex <= 0) {
+    return undefined;
+  }
+
+  const key = trimmed.slice(0, equalsIndex).trim();
+  const rawValue = trimmed.slice(equalsIndex + 1).trim();
+
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+    return undefined;
+  }
+
+  return { key, value: unquoteDotenvValue(rawValue) };
+}
+
+function unquoteDotenvValue(value: string): string {
+  if (value.length >= 2) {
+    const quote = value[0];
+    const last = value[value.length - 1];
+
+    if ((quote === "\"" || quote === "'") && last === quote) {
+      return value.slice(1, -1);
+    }
+  }
+
+  return value;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  runCli(process.argv.slice(2)).catch((error: unknown) => {
-    consoleIo.stderr(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  });
+  loadDotenvFile()
+    .then(() => runCli(process.argv.slice(2)))
+    .catch((error: unknown) => {
+      consoleIo.stderr(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    });
 }
