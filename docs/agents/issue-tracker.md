@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations. PRD Issues describe direction and index Goal Issues; Coding Agents execute Goal Issues that follow `docs/agents/goal-issues.md`.
 
 ## Conventions
 
