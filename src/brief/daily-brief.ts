@@ -79,7 +79,7 @@ export function generateLowSignalDailyBrief(input: DailyBriefInput): string {
 }
 
 export function generateDailyBrief(input: GenerateDailyBriefInput): DailyBrief {
-  const relevantItems = input.sourceItems.filter(isRelevantSourceItem);
+  const relevantItems = input.sourceItems.filter((item) => isBriefEligibleSourceItem(item) && isRelevantSourceItem(item));
   const signals = buildSignals(relevantItems);
   const sourceIds = new Set(input.sourceItems.map((item) => item.sourceId));
 
@@ -96,6 +96,14 @@ export function generateDailyBrief(input: GenerateDailyBriefInput): DailyBrief {
       partialFailures: input.partialFailures ?? []
     }
   };
+}
+
+function isBriefEligibleSourceItem(item: SourceItem): boolean {
+  if (item.platform !== "github") {
+    return true;
+  }
+
+  return !item.url.includes("github.com/sponsors/");
 }
 
 export function renderDailyBriefMarkdown(brief: DailyBrief): string {

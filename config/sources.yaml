@@ -17,4 +17,10 @@
 #     enabled: true
 #     notes: Agent-related GitHub projects gaining attention
 
-sources: []
+sources:
+  - id: github-trending-daily
+    platform: github
+    adapter: github-trending
+    target: https://github.com/trending?since=daily
+    enabled: true
+    notes: Site-wide daily GitHub Trending; Brief generation filters for Agent Architecture and AI Coding signals

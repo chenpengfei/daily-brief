@@ -65,6 +65,34 @@ describe("Daily Brief generation", () => {
     expect(brief.executiveSummary).toContain("low-signal day");
   });
 
+  it("keeps historical GitHub sponsor links out of the Brief", () => {
+    const brief = generateDailyBrief({
+      date: new Date("2026-05-28T07:00:00.000Z"),
+      sourceItems: [
+        sourceItem({
+          id: "github-trending:sponsor",
+          sourceId: "github-trending-daily",
+          platform: "github",
+          title: "sponsors/affaan-m",
+          url: "https://github.com/sponsors/affaan-m",
+          analyzableText:
+            "Sponsor Star affaan-m / ECC The agent harness performance optimization system with memory and security."
+        }),
+        sourceItem({
+          id: "github-trending:repo",
+          sourceId: "github-trending-daily",
+          platform: "github",
+          title: "affaan-m/ECC",
+          url: "https://github.com/affaan-m/ECC",
+          analyzableText: "The agent harness performance optimization system with memory and security."
+        })
+      ]
+    });
+
+    expect(brief.signals.map((signal) => signal.title)).toEqual(["affaan-m/ECC"]);
+    expect(brief.signals[0]?.citations.map((citation) => citation.url)).toEqual(["https://github.com/affaan-m/ECC"]);
+  });
+
   it("renders the MVP four-section Markdown template", () => {
     const brief = generateDailyBrief({
       date: new Date("2026-05-28T07:00:00.000Z"),

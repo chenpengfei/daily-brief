@@ -112,4 +112,91 @@ describe("GitHub Trending Fetch Adapter", () => {
     });
     expect(items[0]?.analyzableText).toContain("Momentum: +42 stars today.");
   });
+
+  it("ignores sponsor links when parsing GitHub trending repository HTML", async () => {
+    const adapter = createGitHubTrendingFetchAdapter({
+      fetchImpl: async () =>
+        new Response(
+          [
+            "<article>",
+            "  <a href=\"/sponsors/affaan-m\">Sponsor</a>",
+            "  <h2><a href=\"/affaan-m/ECC\">affaan-m / ECC</a></h2>",
+            "  <p>The agent harness performance optimization system.</p>",
+            "  <span>1,385 stars today</span>",
+            "</article>"
+          ].join("\n"),
+          { status: 200 }
+        )
+    });
+
+    const items = await adapter.fetch(
+      {
+        id: "github-trending-page",
+        platform: "github",
+        adapter: "github-trending",
+        target: "https://github.com/trending?since=daily",
+        enabled: true,
+        notes: "Trending page"
+      },
+      { fetchedAt: new Date("2026-05-29T06:00:00.000Z") }
+    );
+
+    expect(items[0]).toMatchObject({
+      url: "https://github.com/affaan-m/ECC",
+      title: "affaan-m/ECC",
+      author: "affaan-m",
+      metadata: {
+        repoName: "affaan-m/ECC",
+        starsToday: 1385
+      }
+    });
+  });
+
+  it("identifies trending repository observations by repo and collection date", async () => {
+    const adapter = createGitHubTrendingFetchAdapter({
+      fetchImpl: async () =>
+        new Response(
+          [
+            "<article>",
+            "  <h2><a href=\"/example/agent-runtime\">example / agent-runtime</a></h2>",
+            "  <p>Agent runtime toolkit for durable tool execution.</p>",
+            "  <span>42 stars today</span>",
+            "</article>"
+          ].join("\n"),
+          { status: 200 }
+        )
+    });
+    const source = {
+      id: "github-trending-page",
+      platform: "github",
+      adapter: "github-trending",
+      target: "https://github.com/trending?since=daily",
+      enabled: true,
+      notes: "Trending page"
+    };
+
+    const firstRun = await adapter.fetch(source, {
+      fetchedAt: new Date("2026-05-29T06:00:00.000Z"),
+      collectionDate: new Date("2026-05-29T06:00:00.000Z")
+    });
+    const rerunSameDay = await adapter.fetch(source, {
+      fetchedAt: new Date("2026-05-29T07:00:00.000Z"),
+      collectionDate: new Date("2026-05-29T06:00:00.000Z")
+    });
+    const nextDay = await adapter.fetch(source, {
+      fetchedAt: new Date("2026-05-30T06:00:00.000Z"),
+      collectionDate: new Date("2026-05-30T06:00:00.000Z")
+    });
+
+    expect(firstRun[0]?.id).toBe(rerunSameDay[0]?.id);
+    expect(firstRun[0]?.id).not.toBe(nextDay[0]?.id);
+    expect(firstRun[0]?.metadata).toMatchObject({
+      repoName: "example/agent-runtime",
+      observedForDate: "2026-05-29",
+      trendingRange: "daily"
+    });
+    expect(nextDay[0]?.metadata).toMatchObject({
+      observedForDate: "2026-05-30"
+    });
+  });
 });

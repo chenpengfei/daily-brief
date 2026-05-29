@@ -45,11 +45,11 @@ The lightweight category used to explain why a Signal belongs in Top Signals. MV
 _Avoid_: Brief section, source platform, priority
 
 **Signal Score**:
-An explainable importance judgment used to rank and filter Signals for the Daily Brief. Signal Score should consider relevance, novelty, actionability, credibility, and momentum across Sources. The Daily Brief should show concise selection reasons and sources rather than exposing Signal Score as a raw number.
-_Avoid_: Popularity score, engagement score, opaque ranking
+An explainable importance judgment used to rank and filter Signals for the Daily Brief. Signal Score should consider relevance, novelty, actionability, credibility, and momentum across Sources, but relevance to a Focus Area comes before popularity or trend momentum. The Daily Brief should show concise selection reasons and sources rather than exposing Signal Score as a raw number.
+_Avoid_: Popularity score, engagement score, opaque ranking, trending rank
 
 **Daily Brief**:
-A recurring reader-facing summary produced once per day from the available Signals. A Daily Brief should take about five to ten minutes to read and should preserve quality on low-signal days rather than filling space with weak or irrelevant content. Cross-Signal Research Themes are deferred to V2.
+A recurring reader-facing summary produced once per day from the available Signals. A Daily Brief should take about five to ten minutes to read and should preserve quality on low-signal days rather than filling space with weak or irrelevant content. It is narrower than the Source Item Store: collected but irrelevant Source Items should remain out of reader-facing Signals. Cross-Signal Research Themes are deferred to V2.
 _Avoid_: News feed, link dump, exhaustive digest
 
 **Daily Brief Template**:
@@ -60,9 +60,17 @@ _Avoid_: Link dump, opaque summary, unsupported research section
 The recurring schedule for collection and delivery. The Daily Brief Agent collects Source updates once per day starting at 06:00 and pushes the Daily Brief through Discord Delivery at 07:00. On partial collection or analysis failure, delivery remains on time and the Daily Brief notes any material incompleteness; core workflow failure results in a failure notification rather than a false brief.
 _Avoid_: Continuous polling, real-time alerts, ad hoc delivery
 
+**Manual Run**:
+A human-triggered execution of the Daily Brief Agent outside the recurring Daily Brief Cadence. A Manual Run uses the configured Source Registry, performs collection, brief generation, archive writing, and Discord Delivery once, and follows the same source-grounding and Autonomy Boundary rules as scheduled runs.
+_Avoid_: One-off script, source discovery, scheduler
+
 **Collection Window**:
 The time range a collection run covers for each Source. Each Source is collected incrementally from its last successful fetch, while a Daily Brief summarizes new Signals since the previous Daily Brief.
 _Avoid_: Full recrawl, fixed calendar day, duplicate window
+
+**Trending Range**:
+The time range a trend-list Source Platform uses to calculate a ranking, such as GitHub Trending's daily, weekly, or monthly view. A Trending Range describes the external platform's ranking window; it is not the Daily Brief Agent's Collection Window and does not replace Source Item identity, deduplication, or cross-run state.
+_Avoid_: Collection Window, cursor, checkpoint
 
 **Brief Language**:
 The Daily Brief is written primarily in Chinese while preserving important English technical terms, project names, repository names, paper titles, and source titles. Translation should support understanding rather than obscure the original terminology.
@@ -77,7 +85,7 @@ A collected content unit from a Source, such as an X post, blog post, GitHub rel
 _Avoid_: Full mirror, brief, signal
 
 **Source Item Store**:
-The machine-readable working store for collected Source Items, organized as JSONL files under `data/source-items/YYYY/MM/YYYY-MM-DD.jsonl`. The Source Item Store supports deduplication, analysis, debugging, and later indexing; it is distinct from the human-readable Brief Archive.
+The machine-readable working store for collected Source Items, organized as JSONL files under `data/source-items/YYYY/MM/YYYY-MM-DD.jsonl`. The Source Item Store supports deduplication, analysis, debugging, later indexing, replay, and audit of collected-but-not-selected items; it is distinct from the human-readable Brief Archive.
 _Avoid_: Brief Archive, raw web cache, long-term reading surface
 
 **X Source Item**:
@@ -91,6 +99,18 @@ _Avoid_: Blog, feed
 **GitHub Source Item**:
 A meaningful repository or organization event from a configured GitHub Source, such as a release, important pull request or issue, burst of development around a capability, or substantial documentation change. Ordinary commits are not automatically Signals.
 _Avoid_: Every commit, repository mirror
+
+**Trending Repository Observation**:
+A GitHub Source Item produced by a trend-list Source when a repository appears in a specific Trending Range during a Collection Window. It records that the repository gained platform-visible attention at that time; its stable identity is the observing Source, repository URL, and Daily Brief date. It does not make the repository itself a Source, and repeated observations across Daily Brief dates may show momentum without automatically becoming repeated Signals.
+_Avoid_: Repository Source, subscription, duplicate repository
+
+**Trend-List Collection Boundary**:
+The rule that a trend-list Fetch Adapter collects only information visible in the trend list itself, such as repository name, URL, short description, and lightweight ranking or momentum metrics. It should not fetch repository README files, issues, pull requests, releases, or API detail pages unless that repository is manually configured as its own Source, and it should not use stale trend-list data as a silent fallback for a failed current collection.
+_Avoid_: Repository deep dive, automatic repo subscription, README summarization, stale trend fallback
+
+**Repeat Signal Selection**:
+The rule that a new Source Item occurrence for previously cited content does not automatically become a new Signal in a later Daily Brief. A repeated observation may support momentum, but it should re-enter Top Signals only when there is a new selection reason, such as materially changed context, unusual continued momentum, corroboration from another Source, or a new architecture, AI Coding, tool, or risk implication.
+_Avoid_: Repeat mention, automatic re-alert, duplicate Signal
 
 **YouTube Source Item**:
 A single video from a configured YouTube channel or playlist Source. The video is the Source Item; transcript segments may support Signal analysis when available.
@@ -129,7 +149,7 @@ The Operational CLI output for inspecting collection, analysis, archive, and del
 _Avoid_: Daily brief content, alert feed, source ranking
 
 **Core Workflow Failure**:
-A failure that prevents the Daily Brief Agent from honestly producing or delivering a Daily Brief, such as unreadable Source Registry, unwritable Brief Archive, no successful collection with no usable prior data, unavailable brief generation, or inability to send any Discord notification. Partial Source failures, missing transcripts, rate limits, and individual parse failures are not Core Workflow Failures.
+A failure that prevents the Daily Brief Agent from honestly producing or delivering a Daily Brief, such as unreadable Source Registry, unwritable Brief Archive, no successful collection with no usable prior data, unavailable brief generation, or inability to send any Discord notification. Partial Source failures, trend-list parsing failures for one Source, missing transcripts, rate limits, and individual parse failures are not Core Workflow Failures.
 _Avoid_: Partial failure, low-signal day, incomplete source coverage
 
 **Brief Archive**:

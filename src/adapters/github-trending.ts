@@ -25,10 +25,12 @@ export function createGitHubTrendingFetchAdapter(options: GitHubTrendingFetchAda
     name: "github-trending",
     async fetch(source: Source, context: FetchContext): Promise<SourceItem[]> {
       const candidates = await readGitHubCandidates(source.target, options.fetchImpl);
+      const observedForDate = (context.collectionDate ?? context.fetchedAt).toISOString().slice(0, 10);
+      const trendingRange = readTrendingRange(source.target);
 
       return candidates.map((candidate) => {
         const input = {
-          id: `${source.id}:${stableRepoId(candidate)}`,
+          id: `${source.id}:${stableRepoId(candidate, observedForDate)}`,
           sourceId: source.id,
           platform: source.platform,
           url: candidate.url,
@@ -41,7 +43,9 @@ export function createGitHubTrendingFetchAdapter(options: GitHubTrendingFetchAda
             forks: candidate.forks,
             watchers: candidate.watchers,
             starsToday: candidate.starsToday,
-            previousStars: candidate.previousStars
+            previousStars: candidate.previousStars,
+            observedForDate,
+            ...(trendingRange ? { trendingRange } : {})
           },
           ...(candidate.owner ? { author: candidate.owner } : {}),
           ...(candidate.pushedAt ? { publishedAt: candidate.pushedAt } : {})
@@ -119,7 +123,7 @@ function parseTrendingHtml(body: string): GitHubRepoCandidate[] {
   const articles = body.match(articlePattern) ?? [];
 
   return articles.flatMap((article) => {
-    const repoMatch = article.match(/href="\/([^/"]+\/[^/"]+)"/);
+    const repoMatch = article.match(/<h2[\s\S]*?href="\/([^/"]+\/[^/"]+)"/);
 
     if (!repoMatch?.[1]) {
       return [];
@@ -168,8 +172,22 @@ function buildAnalyzableText(candidate: GitHubRepoCandidate): string {
     .join(" ");
 }
 
-function stableRepoId(candidate: GitHubRepoCandidate): string {
-  return createHash("sha256").update(candidate.url).digest("hex").slice(0, 16);
+function stableRepoId(candidate: GitHubRepoCandidate, observedForDate: string): string {
+  return createHash("sha256").update(`${candidate.url}|${observedForDate}`).digest("hex").slice(0, 16);
+}
+
+function readTrendingRange(target: string): string | undefined {
+  try {
+    const url = new URL(target);
+
+    if (!url.hostname.endsWith("github.com") || url.pathname !== "/trending") {
+      return undefined;
+    }
+
+    return url.searchParams.get("since") ?? "daily";
+  } catch {
+    return undefined;
+  }
 }
 
 function readString(source: Record<string, unknown>, primary: string, fallback: string): string {
