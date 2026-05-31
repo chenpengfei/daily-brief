@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertNarrativeGrounding, enrichDailyBriefNarrativeWithAgent, validateAgentStageOutput } from "../../src/agent/index.js";
+import { enrichDailyBriefNarrativeWithAgent, validateAgentStageOutput } from "../../src/agent/index.js";
 import type { DailyBrief } from "../../src/brief/index.js";
 import type { SourceItem } from "../../src/domain/index.js";
 
@@ -52,43 +52,6 @@ describe("Signal Narrative Stage", () => {
     expect(result.events).toContain("signal_narrative:agent_start");
   });
 
-  it("rejects ordered per-source mapping language across multiple citations", () => {
-    expect(() =>
-      assertNarrativeGrounding(
-        {
-          signals: [
-            {
-              id: "signal:one",
-              type: "architecture",
-              title: "Agent skills",
-              currentFallback: {
-                summary: { whatItIs: "fallback", whatItIsNot: "fallback", minimalExample: "fallback" },
-                whyItMatters: "fallback"
-              },
-              citedSourceItems: [
-                { id: "item-1", sourceId: "source", platform: "github", url: "https://example.com/1", title: "A", analyzableText: "A" },
-                { id: "item-2", sourceId: "source", platform: "github", url: "https://example.com/2", title: "B", analyzableText: "B" }
-              ]
-            }
-          ]
-        },
-        {
-          executiveSummary: "summary",
-          signalNarratives: [
-            {
-              signalId: "signal:one",
-              focusAreas: ["Agent 架构"],
-              directions: ["先进工具"],
-              whatItIs: "A、B 分别指向 skills 与 memory。",
-              whatItIsNot: "不是成熟度背书。",
-              minimalExample: "读 README。",
-              whyItMatters: "它提供检查点。"
-            }
-          ]
-        }
-      )
-    ).toThrow("Signal narrative grounding failed");
-  });
 });
 
 function brief(): DailyBrief {

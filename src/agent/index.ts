@@ -5,5 +5,6 @@ export * from "./signal-narrative.js";
 export * from "./signal-selection-ranking.js";
 export * from "./source-item-understanding.js";
 export * from "./source-grounding-audit.js";
+export * from "./source-grounding-repair.js";
 export * from "./stage-contracts.js";
 export * from "./stage-runner.js";

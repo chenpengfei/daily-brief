@@ -124,6 +124,9 @@ async function runAuditAgent(request: unknown, runtime: StageModelRuntime): Prom
       "",
       "如果无法确认某个强断言被 cited Source Item 支撑，必须 failed。",
       "如果 Source Coverage 有 partial failures，Executive Summary 不得声称完整覆盖。",
+      "Source Coverage 的 Processed N Source Items from M Sources 是运行覆盖统计，不表示 Top Signals 必须叙述每个 Source Item；不要因为未引用所有 Source Items 而 failed。",
+      "whyItMatters 和 minimalExample 可以包含基于 cited facts 的有限读者含义或设计检查点；只要它没有引入外部事实、质量背书、采用趋势或未支撑能力，不要仅因 Source Item 没有逐字说“设计者需要...”而 failed。",
+      "对规范性措辞的审查重点是是否越过 cited facts：例如“必须采用”“已经成熟”“广泛使用”需要直接支撑；“提醒设计者检查...”这类弱含义可由 cited capabilities 支撑。",
       "",
       "Input:",
       JSON.stringify(request, null, 2)

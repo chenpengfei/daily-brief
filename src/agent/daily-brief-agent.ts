@@ -17,6 +17,7 @@ import { readModelRuntimeConfig, type ModelRuntimeConfig, type ModelRuntimeEnv }
 import { enrichDailyBriefNarrativeWithAgent } from "./signal-narrative.js";
 import { runSignalSelectionAndRankingStages } from "./signal-selection-ranking.js";
 import { AnalysisFailureError, runSourceGroundingAuditStage } from "./source-grounding-audit.js";
+import { runSourceGroundingRepairStage } from "./source-grounding-repair.js";
 import { runSourceItemUnderstandingStage } from "./source-item-understanding.js";
 import { runAgentStage } from "./stage-runner.js";
 
@@ -218,7 +219,6 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
       date,
       sourceItems,
       brief: narrative.brief,
-      attempt: 1,
       ...(options.collectionFailures ? { collectionFailures: options.collectionFailures } : {})
     });
     const audited = await auditBriefWithSingleRepairAttempt({
@@ -266,8 +266,6 @@ async function recordNarrativeStage(input: {
   sourceItems: SourceItem[];
   brief: DailyBrief;
   collectionFailures?: Array<{ sourceId: string; reason: string }>;
-  attempt: number;
-  repairFindings?: AnalysisFailureError["findings"];
 }): Promise<{ artifactPath?: string }> {
   const result = await runAgentStage({
     stage: "narrative",
@@ -276,9 +274,7 @@ async function recordNarrativeStage(input: {
     inputRefs: {
       ...(input.collectionFailures ? { collectionFailures: input.collectionFailures } : {}),
       sourceItemIds: input.sourceItems.map((item) => item.id),
-      signalIds: input.brief.signals.map((signal) => signal.id),
-      attempt: input.attempt,
-      ...(input.repairFindings ? { repair: { stage: "audit", findings: input.repairFindings } } : {})
+      signalIds: input.brief.signals.map((signal) => signal.id)
     },
     validationContext: {
       signalIds: input.brief.signals.map((signal) => signal.id)
@@ -329,23 +325,16 @@ async function auditBriefWithSingleRepairAttempt(input: {
       throw error;
     }
 
-    const repaired = await enrichDailyBriefNarrativeWithAgent({
+    const repaired = await runSourceGroundingRepairStage({
       brief: input.narrativeBrief,
       sourceItems: input.sourceItems,
+      auditFindings: error.findings,
+      artifact: input.artifact,
       modelRuntimeConfig: input.modelRuntimeConfig,
-      repairContext: { auditFindings: error.findings },
+      ...(input.collectionInputRefs ? { inputRefs: input.collectionInputRefs } : {}),
       ...(input.modelRuntimeEnv ? { modelRuntimeEnv: input.modelRuntimeEnv } : {})
     });
     narrativeEvents.push(...repaired.events);
-    await recordNarrativeStage({
-      artifact: input.artifact,
-      date: input.date,
-      sourceItems: input.sourceItems,
-      brief: repaired.brief,
-      attempt: 2,
-      repairFindings: error.findings,
-      ...(input.collectionFailures ? { collectionFailures: input.collectionFailures } : {})
-    });
     const audited = await runSourceGroundingAuditStage({
       brief: repaired.brief,
       sourceItems: input.sourceItems,

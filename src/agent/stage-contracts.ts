@@ -1,4 +1,4 @@
-export const AGENT_STAGE_NAMES = ["understanding", "selection", "ranking", "narrative", "audit"] as const;
+export const AGENT_STAGE_NAMES = ["understanding", "selection", "ranking", "narrative", "audit", "repair"] as const;
 
 export type AgentStageName = (typeof AGENT_STAGE_NAMES)[number];
 
@@ -7,7 +7,8 @@ export type AgentStageOutput =
   | SelectionStageOutput
   | RankingStageOutput
   | NarrativeStageOutput
-  | AuditStageOutput;
+  | AuditStageOutput
+  | RepairStageOutput;
 
 export interface UnderstandingStageOutput {
   stage: "understanding";
@@ -72,6 +73,20 @@ export interface AuditStageOutput {
   }>;
 }
 
+export interface RepairStageOutput {
+  stage: "repair";
+  executiveSummary?: string;
+  signalNarratives: Array<{
+    signalId: string;
+    focusAreas: string[];
+    directions: string[];
+    whatItIs: string;
+    whatItIsNot: string;
+    minimalExample: string;
+    whyItMatters: string;
+  }>;
+}
+
 export interface AgentStageValidationContext {
   sourceItemIds?: string[];
   signalIds?: string[];
@@ -131,9 +146,9 @@ export function validateAgentStageOutput(
     validateSelection(value, context, issues);
   } else if (stage === "ranking") {
     validateRanking(value, context, issues);
-  } else if (stage === "narrative") {
+  } else if (stage === "narrative" || stage === "repair") {
     validateNarrative(value, context, issues);
-  } else {
+  } else if (stage === "audit") {
     validateAudit(value, context, issues);
   }
 
