@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { loadSourceRegistry } from "../config/index.js";
+import { loadSourceRegistry, resolveDailyBriefPaths } from "../config/index.js";
 import type { SourceCollectionResult } from "../collection/index.js";
 
 export type WorkflowHealth = "success" | "partial-failure" | "core-failure";
@@ -105,7 +105,7 @@ export async function getOperationalStatus(options: OperationalStatusOptions = {
     });
   }
 
-  const archivePath = briefArchivePath(date, options.archiveRoot ?? "briefs");
+  const archivePath = briefArchivePath(date, options.archiveRoot ?? resolveDailyBriefPaths().briefArchiveRoot);
 
   try {
     await readFile(archivePath, "utf8");

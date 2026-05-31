@@ -1,6 +1,14 @@
 # Daily Brief Operations
 
-The MVP Operational CLI exposes the daily workflow as independent commands:
+Installed usage uses the `daily-brief` binary:
+
+```bash
+daily-brief setup
+daily-brief run-once --date 2026-05-28
+daily-brief status
+```
+
+Development usage from a repository checkout uses `npm run cli --`:
 
 ```bash
 npm run cli -- collect
@@ -37,21 +45,23 @@ Discord Delivery uses `DISCORD_WEBHOOK_URL` from the shell environment or local 
 
 When the Operational CLI starts, it loads local `.env` values from the repository root if the file exists. Existing shell environment variables take precedence over `.env` values. The `.env` file is ignored by Git; use `.env.example` as the non-secret template.
 
-Operational paths can be adjusted through environment variables:
+Installed operational paths can be adjusted through environment variables:
 
-- `DAILY_BRIEF_SOURCE_REGISTRY_PATH`: Source Registry path. Defaults to `config/sources.yaml`.
-- `DAILY_BRIEF_SOURCE_ITEM_ROOT`: Source Item Store root. Defaults to `data/source-items`.
-- `DAILY_BRIEF_ARCHIVE_ROOT`: Brief Archive root. Defaults to `briefs`.
+- `DAILY_BRIEF_HOME`: user config directory. Defaults to `~/.daily-brief`.
+- `DAILY_BRIEF_DATA_HOME`: generated data directory. Defaults to `~/.daily-brief/data`.
 - `DAILY_BRIEF_DISCORD_TEMPLATE_PATH`: Discord notification template path. Defaults to `templates/discord-notification.md`.
 - `DISCORD_WEBHOOK_URL`: Discord webhook URL. If unset, Discord Delivery is skipped with an explicit reason.
 
-Model/provider configuration is also environment-based and must not be stored in the Source Registry:
+Model/provider and delivery configuration should normally be managed with:
 
-- `DAILY_BRIEF_MODEL_PROVIDER`: `faux` by default, or `openai` for the production OpenAI contract.
-- `DAILY_BRIEF_MODEL`: model name. Defaults to `faux-daily-brief-renderer` for `faux` and `gpt-4.1-mini` for `openai`.
-- `OPENAI_API_KEY`: required when `DAILY_BRIEF_MODEL_PROVIDER=openai`.
+```bash
+daily-brief model configure
+daily-brief model status
+daily-brief delivery configure --enabled true --webhook-url <url>
+daily-brief delivery status
+```
 
-Tests use the faux provider and mocked transports. Secrets should be supplied through the runtime environment, never committed and never placed in `config/sources.yaml`.
+Secrets live in `~/.daily-brief/auth.json` or environment variables, never in `sources.yaml` or committed project files. Tests use the faux provider and mocked transports.
 
 ## GitHub Trending collection
 

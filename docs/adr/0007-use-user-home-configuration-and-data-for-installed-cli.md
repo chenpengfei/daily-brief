@@ -1,0 +1,3 @@
+# Use User Home Configuration and Data for Installed CLI
+
+The installed Daily Brief CLI will store user-specific configuration in `~/.daily-brief/` as flat files such as `config.yaml`, `sources.yaml`, and `auth.json`, while generated artifacts live under `~/.daily-brief/data/` as `source-items/`, `agent-runs/`, and `briefs/`. `DAILY_BRIEF_HOME` overrides the configuration root and `DAILY_BRIEF_DATA_HOME` overrides the generated-data root. This keeps personal Sources, provider choices, credentials, and generated Daily Brief artifacts out of the project repository, lets external schedulers invoke the installed CLI without a checkout, avoids committing `config/sources.yaml`, and defers named profiles in favor of separate home/data roots for the first version.

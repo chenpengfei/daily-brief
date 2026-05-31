@@ -12,6 +12,7 @@ describe("daily workflow orchestration", () => {
     const fixturePath = join(directory, "fixture.json");
     const sourceItemRoot = join(directory, "source-items");
     const archiveRoot = join(directory, "briefs");
+    const agentRunRoot = join(directory, "agent-runs");
     const date = new Date("2026-05-28T07:00:00.000Z");
 
     try {
@@ -48,21 +49,45 @@ describe("daily workflow orchestration", () => {
         date,
         sourceRegistryPath: registryPath,
         sourceItemRoot,
-        archiveRoot
+        archiveRoot,
+        agentRunRoot
       });
       const secondRun = await runOnce({
         date,
         sourceRegistryPath: registryPath,
         sourceItemRoot,
-        archiveRoot
+        archiveRoot,
+        agentRunRoot
       });
       const stored = await readSourceItems(date, sourceItemRoot);
       const archived = await readFile(firstRun.archivePath, "utf8");
+      const artifact = await readFile(String(firstRun.agentRunArtifactPath), "utf8");
 
       expect(firstRun.collection.sources[0]).toMatchObject({ writtenCount: 1, skippedDuplicateCount: 0 });
       expect(secondRun.collection.sources[0]).toMatchObject({ writtenCount: 0, skippedDuplicateCount: 1 });
       expect(stored).toHaveLength(1);
       expect(archived.match(/### Agent runtime patterns/g)).toHaveLength(1);
+      expect(archived).toContain("- 是什么: 当前 Source Item 表明：Agent Architecture notes about tool execution.");
+      expect(archived).toContain(
+        "- 为什么重要: 它值得关注，因为 Agent runtime patterns 暴露了一个可检查的 Agent Architecture 或 AI Coding 实践切面。"
+      );
+      expect(firstRun.piEvents).toContain("signal_narrative:agent_start");
+      const parsedArtifact = JSON.parse(artifact);
+      expect(parsedArtifact).toMatchObject({
+        model: { provider: "faux", model: "faux-daily-brief-renderer" },
+        inputRefs: { signalIds: ["signal:https://example.com/agent-runtime"] },
+        stages: [
+          { stage: "understanding", status: "succeeded", validation: { status: "passed" } },
+          { stage: "selection", status: "succeeded", validation: { status: "passed" } },
+          { stage: "ranking", status: "succeeded", validation: { status: "passed" } },
+          { stage: "narrative", status: "succeeded", validation: { status: "passed" } },
+          { stage: "audit", status: "succeeded", validation: { status: "passed" } }
+        ]
+      });
+      expect(parsedArtifact.inputRefs.sourceItemIds).toHaveLength(1);
+      expect(parsedArtifact.inputRefs.sourceItemIds[0]).toContain("fixture-blog:");
+      expect(artifact).not.toContain("Render this Source-grounded Daily Brief");
+      expect(artifact).not.toContain("transcript");
       expect(firstRun.delivery).toEqual({ status: "skipped", reason: "DISCORD_WEBHOOK_URL is not configured" });
     } finally {
       await rm(directory, { recursive: true, force: true });

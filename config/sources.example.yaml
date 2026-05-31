@@ -1,4 +1,7 @@
-# Source Registry for Daily Brief.
+# Example Source Registry for Daily Brief.
+#
+# User-specific Source Registry lives outside the repository, normally at:
+# ~/.daily-brief/sources.yaml
 #
 # Each Source has:
 # - id: stable unique identifier
@@ -7,15 +10,6 @@
 # - target: adapter-specific locator or query
 # - enabled: collection switch
 # - notes: human-readable reason for including the Source
-#
-# Example:
-# sources:
-#   - id: github-agent-trending
-#     platform: github
-#     adapter: github-search
-#     target: "topic:ai-agent stars:>1000"
-#     enabled: true
-#     notes: Agent-related GitHub projects gaining attention
 
 sources:
   - id: github-trending-daily

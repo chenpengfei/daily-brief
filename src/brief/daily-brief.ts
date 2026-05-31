@@ -10,10 +10,19 @@ export interface SignalCitation {
   url: string;
 }
 
+export interface SignalSummary {
+  whatItIs: string;
+  whatItIsNot: string;
+  minimalExample: string;
+}
+
 export interface Signal {
   id: string;
   type: SignalType;
   title: string;
+  focusAreas?: string[];
+  directions?: string[];
+  summary: SignalSummary;
   whyItMatters: string;
   citations: SignalCitation[];
 }
@@ -152,6 +161,7 @@ function buildSignals(items: SourceItem[]): Signal[] {
       id: `signal:${key}`,
       type: classifySignal(primary),
       title: primary.title,
+      summary: summarizeSignal(primary),
       whyItMatters: explainWhyItMatters(primary),
       citations: group.map((item) => ({
         sourceItemId: item.id,
@@ -168,6 +178,7 @@ function isRelevantSourceItem(item: SourceItem): boolean {
   const terms = [
     "agent architecture",
     "agent runtime",
+    "agentic coding",
     "coding agent",
     "ai coding",
     "tool execution",
@@ -211,6 +222,71 @@ function explainWhyItMatters(item: SourceItem): string {
   return reasonByType[type];
 }
 
+function summarizeSignal(item: SourceItem): SignalSummary {
+  const type = classifySignal(item);
+  const description = sourceGroundedDescription(item);
+  const whatItIs =
+    item.platform === "github"
+      ? `它是一个 GitHub repository：${description}`
+      : `它是一个 Source-grounded Signal：${description}`;
+
+  return {
+    whatItIs,
+    whatItIsNot: explainWhatItIsNot(item, type),
+    minimalExample: explainMinimalExample(item, type)
+  };
+}
+
+function sourceGroundedDescription(item: SourceItem): string {
+  const metadataDescription = readMetadataString(item.metadata, "description");
+
+  return cleanupDescription(metadataDescription ?? item.analyzableText);
+}
+
+function readMetadataString(metadata: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = metadata?.[key];
+
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function cleanupDescription(value: string): string {
+  const withoutMomentum = value
+    .replace(/\s+Momentum:.*$/i, "")
+    .replace(/\s+Ordinary commits are not treated as Source Items by this adapter\.$/i, "");
+  const withoutTrendingPrefix = withoutMomentum.replace(/^(Sponsor\s+)?Star\s+[\w.-]+\s+\/\s+[\w.-]+\s+/i, "");
+  const trimmed = withoutTrendingPrefix.replace(/\s+/g, " ").trim();
+
+  return trimmed.replace(/[。.!?]+$/u, "");
+}
+
+function explainWhatItIsNot(item: SourceItem, type: SignalType): string {
+  return `不是${unsupportedClaimBoundary(item, type)}；当前只代表它在本次 Source Items 中形成了 ${type} Signal。`;
+}
+
+function unsupportedClaimBoundary(item: SourceItem, type: SignalType): string {
+  if (item.platform === "github" || type === "tool-repo") {
+    return "对项目成熟度或适用性的背书";
+  }
+
+  return "未引用来源支撑的通用观点";
+}
+
+function explainMinimalExample(item: SourceItem, type: SignalType): string {
+  if (type === "tool-repo") {
+    return `最小地看，先阅读 ${item.title} 的 README 或最小使用路径，再判断它是否适合当前工具链。`;
+  }
+
+  if (type === "risk") {
+    return "最小地看，把它转成一条检查项，确认当前 Agent workflow 是否显式处理同类风险。";
+  }
+
+  if (type === "ai-coding") {
+    return "最小地看，用一个小型 repo 或单个 review workflow 验证它对 AI Coding 实践的影响。";
+  }
+
+  return "最小地看，用它对照一个 Agent runtime 的 state、tool execution 或 workflow 边界。";
+}
+
 function normalizeSignalKey(item: SourceItem): string {
   return item.url.trim().toLowerCase();
 }
@@ -219,10 +295,18 @@ function renderSignal(signal: Signal): string {
   return [
     `### ${signal.title}`,
     "",
-    `- Type: ${signal.type}`,
-    `- why_it_matters: ${signal.whyItMatters}`,
-    `- Citations: ${signal.citations.map((citation) => citation.sourceItemId).join(", ")}`
+    `- 领域: ${renderLensValues(signal.focusAreas)}`,
+    `- 方向: ${renderLensValues(signal.directions)}`,
+    `- 是什么: ${signal.summary.whatItIs}`,
+    `- 不是什么: ${signal.summary.whatItIsNot}`,
+    `- 最小例子: ${signal.summary.minimalExample}`,
+    `- 为什么重要: ${signal.whyItMatters}`,
+    `- 引用: ${signal.citations.map((citation) => citation.sourceItemId).join(", ")}`
   ].join("\n");
+}
+
+function renderLensValues(values: string[] | undefined): string {
+  return values && values.length > 0 ? values.join(" / ") : "未标注";
 }
 
 function renderSourceCoverage(coverage: SourceCoverage): string {

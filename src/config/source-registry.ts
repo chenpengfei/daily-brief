@@ -1,16 +1,21 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { isMap, isSeq, parse, parseDocument } from "yaml";
 import { parseSourceRegistry, type SourceRegistry } from "../domain/index.js";
+import { resolveDailyBriefPaths } from "./paths.js";
 
-export async function loadSourceRegistry(path = "config/sources.yaml"): Promise<SourceRegistry> {
+export async function loadSourceRegistry(path = resolveDailyBriefPaths().sourceRegistryPath): Promise<SourceRegistry> {
   const contents = await readFile(path, "utf8");
   return parseSourceRegistry(parse(contents));
+}
+
+export async function validateSourceRegistry(path = resolveDailyBriefPaths().sourceRegistryPath): Promise<SourceRegistry> {
+  return loadSourceRegistry(path);
 }
 
 export async function setSourceEnabled(
   id: string,
   enabled: boolean,
-  path = "config/sources.yaml"
+  path = resolveDailyBriefPaths().sourceRegistryPath
 ): Promise<SourceRegistry> {
   const contents = await readFile(path, "utf8");
   const document = parseDocument(contents);

@@ -1,9 +1,16 @@
-import { describe, expect, it } from "vitest";
-import { generateOnce, readModelRuntimeConfig } from "../../src/agent/index.js";
-import { parseSourceRegistry } from "../../src/domain/index.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { describe, expect, it } from "vitest";
+import {
+  generateOnce,
+  loginModelCredential,
+  readModelRuntimeConfig,
+  resolveModelApiKey,
+  type OAuthHelpers
+} from "../../src/agent/index.js";
+import { parseSourceRegistry } from "../../src/domain/index.js";
+import { putCredential, writeModelConfig } from "../../src/config/index.js";
 
 describe("model runtime configuration", () => {
   it("uses the faux provider by default so tests do not require live model secrets", () => {
@@ -15,36 +22,134 @@ describe("model runtime configuration", () => {
     });
   });
 
-  it("parses an OpenAI production contract without exposing the secret value", () => {
-    const config = readModelRuntimeConfig({
-      DAILY_BRIEF_MODEL_PROVIDER: "openai",
-      DAILY_BRIEF_MODEL: "gpt-4.1-mini",
-      OPENAI_API_KEY: "secret-value"
-    });
+  it("reads provider config from user config.yaml and resolves env credential refs without exposing secrets", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-model-runtime-"));
 
-    expect(config).toEqual({
-      provider: "openai",
-      model: "gpt-4.1-mini",
-      secretEnvName: "OPENAI_API_KEY",
-      ready: true,
-      issues: []
-    });
-    expect(JSON.stringify(config)).not.toContain("secret-value");
+    try {
+      writeModelConfig(
+        {
+          provider: "openai",
+          model: "gpt-4.1-mini",
+          credentialRef: "env:OPENAI_API_KEY"
+        },
+        join(directory, "config.yaml")
+      );
+
+      const config = readModelRuntimeConfig(
+        { DAILY_BRIEF_HOME: directory, OPENAI_API_KEY: "secret-value" },
+        { configPath: join(directory, "config.yaml") }
+      );
+
+      expect(config).toEqual({
+        provider: "openai",
+        model: "gpt-4.1-mini",
+        credentialRef: "env:OPENAI_API_KEY",
+        ready: true,
+        issues: []
+      });
+      expect(await resolveModelApiKey(config, { OPENAI_API_KEY: "secret-value" })).toBe("secret-value");
+      expect(JSON.stringify(config)).not.toContain("secret-value");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
-  it("reports missing provider secrets without reading Source Registry fields", () => {
-    expect(
-      readModelRuntimeConfig({
-        DAILY_BRIEF_MODEL_PROVIDER: "openai",
-        DAILY_BRIEF_MODEL: "gpt-4.1-mini"
-      })
-    ).toEqual({
-      provider: "openai",
-      model: "gpt-4.1-mini",
-      secretEnvName: "OPENAI_API_KEY",
-      ready: false,
-      issues: ["OPENAI_API_KEY is required when DAILY_BRIEF_MODEL_PROVIDER=openai"]
-    });
+  it("reports missing provider credentials through credentialRef", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-model-runtime-"));
+
+    try {
+      writeModelConfig(
+        {
+          provider: "openai",
+          model: "gpt-4.1-mini",
+          credentialRef: "env:OPENAI_API_KEY"
+        },
+        join(directory, "config.yaml")
+      );
+
+      expect(readModelRuntimeConfig({ DAILY_BRIEF_HOME: directory })).toEqual({
+        provider: "openai",
+        model: "gpt-4.1-mini",
+        credentialRef: "env:OPENAI_API_KEY",
+        ready: false,
+        issues: ["OPENAI_API_KEY is required for credentialRef env:OPENAI_API_KEY"]
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the selected stored credentialRef without deleting unused credentials", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-model-runtime-"));
+    const authPath = join(directory, "auth.json");
+
+    try {
+      putCredential("openai.work", { type: "api-key", provider: "openai", apiKey: "work-secret" }, authPath);
+      putCredential("openai.personal", { type: "api-key", provider: "openai", apiKey: "personal-secret" }, authPath);
+
+      const config = {
+        provider: "openai" as const,
+        model: "gpt-4.1-mini",
+        credentialRef: "openai.personal",
+        ready: true,
+        issues: []
+      };
+
+      expect(await resolveModelApiKey(config, {}, { authPath })).toBe("personal-secret");
+      expect(await resolveModelApiKey({ ...config, credentialRef: "openai.work" }, {}, { authPath })).toBe("work-secret");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("uses Pi OAuth helpers for openai-codex login and token resolution", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-model-runtime-"));
+    const authPath = join(directory, "auth.json");
+    const calls: string[] = [];
+    const helpers: OAuthHelpers = {
+      async loginOpenAICodex() {
+        calls.push("loginOpenAICodex");
+        return {
+          access: "oauth-access",
+          refresh: "oauth-refresh",
+          expires: Date.now() + 60_000
+        };
+      },
+      async getOAuthApiKey(providerId, credentials) {
+        calls.push(`getOAuthApiKey:${providerId}:${credentials["openai-codex"]?.access}`);
+        return {
+          apiKey: "fresh-access-token",
+          newCredentials: {
+            access: "fresh-access",
+            refresh: "oauth-refresh",
+            expires: Date.now() + 120_000
+          }
+        };
+      }
+    };
+
+    try {
+      await loginModelCredential({
+        provider: "openai-codex",
+        credentialRef: "openai-codex.default",
+        io: { stdout() {} },
+        authPath,
+        oauthHelpers: helpers
+      });
+
+      const config = {
+        provider: "openai-codex" as const,
+        model: "gpt-5.5",
+        credentialRef: "openai-codex.default",
+        ready: true,
+        issues: []
+      };
+
+      expect(await resolveModelApiKey(config, {}, { authPath, oauthHelpers: helpers })).toBe("fresh-access-token");
+      expect(calls).toEqual(["loginOpenAICodex", "getOAuthApiKey:openai-codex:oauth-access"]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("keeps model and secret fields out of the Source Registry contract", () => {
@@ -67,7 +172,7 @@ describe("model runtime configuration", () => {
   });
 
   it("reports the model runtime config used by brief generation without leaking secrets", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "daily-brief-model-config-"));
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-model-runtime-"));
 
     try {
       const result = await generateOnce({
@@ -75,16 +180,14 @@ describe("model runtime configuration", () => {
         sourceItemRoot: join(directory, "source-items"),
         archiveRoot: join(directory, "briefs"),
         modelRuntimeEnv: {
-          DAILY_BRIEF_MODEL_PROVIDER: "openai",
-          DAILY_BRIEF_MODEL: "gpt-4.1-mini",
-          OPENAI_API_KEY: "secret-value"
+          DAILY_BRIEF_MODEL_PROVIDER: "faux",
+          DAILY_BRIEF_MODEL: "faux-daily-brief-renderer"
         }
       });
 
       expect(result.modelRuntimeConfig).toEqual({
-        provider: "openai",
-        model: "gpt-4.1-mini",
-        secretEnvName: "OPENAI_API_KEY",
+        provider: "faux",
+        model: "faux-daily-brief-renderer",
         ready: true,
         issues: []
       });

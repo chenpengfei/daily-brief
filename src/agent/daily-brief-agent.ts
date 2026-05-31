@@ -4,14 +4,26 @@ import { readFile } from "node:fs/promises";
 import { generateDailyBrief, renderDailyBriefMarkdown, type DailyBrief } from "../brief/index.js";
 import { collectSources, type CollectionRunResult } from "../collection/index.js";
 import { deliverCoreFailureNotification, deliverDiscordNotification, type DiscordDeliveryResult } from "../discord/index.js";
-import { briefArchivePath, readSourceItems, writeBriefArchive } from "../storage/index.js";
+import {
+  briefArchivePath,
+  createAgentRunArtifact,
+  readSourceItems,
+  writeAgentRunArtifact,
+  writeBriefArchive
+} from "../storage/index.js";
 import type { CoreWorkflowFailure } from "../workflow/index.js";
 import { readModelRuntimeConfig, type ModelRuntimeConfig, type ModelRuntimeEnv } from "./model-runtime-config.js";
+import { enrichDailyBriefNarrativeWithAgent } from "./signal-narrative.js";
+import { runSignalSelectionAndRankingStages } from "./signal-selection-ranking.js";
+import { runSourceGroundingAuditStage } from "./source-grounding-audit.js";
+import { runSourceItemUnderstandingStage } from "./source-item-understanding.js";
+import { runAgentStage } from "./stage-runner.js";
 
 export interface RunOnceOptions {
   date?: Date;
   sourceRegistryPath?: string;
   archiveRoot?: string;
+  agentRunRoot?: string;
   sourceItemRoot?: string;
   discordWebhookUrl?: string;
   discordFetchImpl?: typeof fetch;
@@ -29,6 +41,7 @@ export interface RunOnceResult {
   delivery: DiscordDeliveryResult;
   coreFailure?: CoreWorkflowFailure;
   modelRuntimeConfig?: ModelRuntimeConfig;
+  agentRunArtifactPath?: string;
 }
 
 export interface GenerateOnceResult {
@@ -38,6 +51,7 @@ export interface GenerateOnceResult {
   sourceItemCount: number;
   piEvents: string[];
   modelRuntimeConfig: ModelRuntimeConfig;
+  agentRunArtifactPath?: string;
 }
 
 export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResult> {
@@ -88,31 +102,98 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
     sourceItemCount: generated.sourceItemCount,
     piEvents: generated.piEvents,
     collection,
-    delivery
+    delivery,
+    ...(generated.agentRunArtifactPath ? { agentRunArtifactPath: generated.agentRunArtifactPath } : {})
   };
 }
 
 export async function generateOnce(options: RunOnceOptions = {}): Promise<GenerateOnceResult> {
   const date = options.date ?? new Date();
   const sourceItems = await readSourceItems(date, options.sourceItemRoot);
-  const brief = generateDailyBrief({ date, sourceItems });
-  const markdown = renderDailyBriefMarkdown(brief);
   const modelRuntimeConfig = readModelRuntimeConfig(options.modelRuntimeEnv);
 
   if (!modelRuntimeConfig.ready) {
     throw new Error(`Model runtime is not ready:\n${modelRuntimeConfig.issues.map((issue) => `- ${issue}`).join("\n")}`);
   }
 
+  const baseBrief = generateDailyBrief({ date, sourceItems });
+  const artifact = createAgentRunArtifact({
+    date,
+    modelRuntimeConfig,
+    inputRefs: {
+      sourceItemIds: sourceItems.map((item) => item.id),
+      signalIds: baseBrief.signals.map((signal) => signal.id)
+    }
+  });
+  const understanding = await runSourceItemUnderstandingStage({
+    sourceItems,
+    modelRuntimeConfig,
+    artifact,
+    ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
+  });
+  const selected = await runSignalSelectionAndRankingStages({
+    sourceItems,
+    annotations: understanding.annotations,
+    artifact
+  });
+  const selectedBrief: DailyBrief = {
+    ...baseBrief,
+    executiveSummary:
+      selected.signals.length === 0
+        ? "今天是 low-signal day：Selection/Ranking Stages 没有选出足够强的 Source-grounded Signals。"
+        : `今天有 ${selected.signals.length} 个 Agent-selected Source-grounded Signals，均保留 Source Item citation 以便回溯。`,
+    signals: selected.signals
+  };
+  const narrative = await enrichDailyBriefNarrativeWithAgent({
+    brief: selectedBrief,
+    sourceItems,
+    modelRuntimeConfig,
+    ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
+  });
+  const narrativeStage = await runAgentStage({
+    stage: "narrative",
+    artifact,
+    date,
+    inputRefs: {
+      sourceItemIds: sourceItems.map((item) => item.id),
+      signalIds: narrative.brief.signals.map((signal) => signal.id)
+    },
+    validationContext: {
+      signalIds: narrative.brief.signals.map((signal) => signal.id)
+    },
+    execute: async () => ({
+      stage: "narrative",
+      executiveSummary: narrative.brief.executiveSummary,
+      signalNarratives: narrative.brief.signals.map((signal) => ({
+        signalId: signal.id,
+        focusAreas: signal.focusAreas ?? [],
+        directions: signal.directions ?? [],
+        whatItIs: signal.summary.whatItIs,
+        whatItIsNot: signal.summary.whatItIsNot,
+        minimalExample: signal.summary.minimalExample,
+        whyItMatters: signal.whyItMatters
+      }))
+    })
+  });
+  const audited = await runSourceGroundingAuditStage({
+    brief: narrative.brief,
+    sourceItems,
+    artifact,
+    allowRepair: true
+  });
+  const writtenArtifact = options.agentRunRoot ? await writeAgentRunArtifact(artifact, date, options.agentRunRoot) : undefined;
+  const markdown = renderDailyBriefMarkdown(audited.brief);
   const piResult = await renderBriefThroughPiRuntime(markdown);
   const archived = await writeBriefArchive(piResult.markdown, date, options.archiveRoot);
 
   return {
     archivePath: archived.path,
     markdown: piResult.markdown,
-    brief,
+    brief: audited.brief,
     sourceItemCount: sourceItems.length,
-    piEvents: piResult.events,
-    modelRuntimeConfig
+    piEvents: [...understanding.events, ...narrative.events, ...piResult.events],
+    modelRuntimeConfig,
+    ...((writtenArtifact?.path ?? narrativeStage.artifactPath) ? { agentRunArtifactPath: writtenArtifact?.path ?? narrativeStage.artifactPath } : {})
   };
 }
 

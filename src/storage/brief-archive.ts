@@ -1,11 +1,16 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { resolveDailyBriefPaths } from "../config/index.js";
 
 export interface ArchivedBrief {
   path: string;
 }
 
-export async function writeBriefArchive(markdown: string, date: Date, root = "briefs"): Promise<ArchivedBrief> {
+export async function writeBriefArchive(
+  markdown: string,
+  date: Date,
+  root = resolveDailyBriefPaths().briefArchiveRoot
+): Promise<ArchivedBrief> {
   const path = briefArchivePath(date, root);
 
   await mkdir(dirname(path), { recursive: true });
@@ -14,7 +19,7 @@ export async function writeBriefArchive(markdown: string, date: Date, root = "br
   return { path };
 }
 
-export function briefArchivePath(date: Date, root = "briefs"): string {
+export function briefArchivePath(date: Date, root = resolveDailyBriefPaths().briefArchiveRoot): string {
   const datePart = date.toISOString().slice(0, 10);
   const [year, month] = datePart.split("-");
 

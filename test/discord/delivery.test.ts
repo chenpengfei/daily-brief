@@ -110,6 +110,11 @@ function briefFixture(): DailyBrief {
         id: "signal:https://example.com/agent-runtime",
         type: "architecture",
         title: "Agent runtime state management",
+        summary: {
+          whatItIs: "它是一个 Source-grounded Signal：Agent runtime state management",
+          whatItIsNot: "不是未引用来源支撑的通用观点；当前只代表它在本次 Source Items 中形成了 architecture Signal。",
+          minimalExample: "最小地看，用它对照一个 Agent runtime 的 state、tool execution 或 workflow 边界。"
+        },
         whyItMatters: "它提供了 Agent Architecture 的具体实现或设计线索，值得进一步阅读原文。",
         citations: [
           {

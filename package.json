@@ -1,14 +1,22 @@
 {
   "name": "daily-brief",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
+  "files": [
+    "dist/src",
+    "config/sources.example.yaml",
+    "templates",
+    "docs/operations.md",
+    "LICENSE"
+  ],
   "bin": {
     "daily-brief": "dist/src/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "cli": "tsx src/cli.ts",
+    "prepack": "npm run build",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

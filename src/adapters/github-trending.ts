@@ -39,6 +39,7 @@ export function createGitHubTrendingFetchAdapter(options: GitHubTrendingFetchAda
           analyzableText: buildAnalyzableText(candidate),
           metadata: {
             repoName: candidate.fullName,
+            ...(candidate.description ? { description: candidate.description } : {}),
             stars: candidate.stars,
             forks: candidate.forks,
             watchers: candidate.watchers,

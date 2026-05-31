@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -24,6 +24,18 @@ describe("workflow CLI commands", () => {
     );
   });
 
+  it("fails non-interactively with setup guidance when configuration is missing", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-missing-config-"));
+
+    try {
+      await expect(runCli(["run-once"], captureOutput([]), { DAILY_BRIEF_HOME: directory })).rejects.toThrow(
+        "Run daily-brief setup first"
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("prints Operational Status from configured registry and archive roots", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-status-"));
     const registryPath = join(directory, "sources.yaml");
@@ -38,8 +50,8 @@ describe("workflow CLI commands", () => {
       await writeFile(archivePath, `# Daily Brief - ${currentDate()}\n`, "utf8");
 
       await runCli(["status"], captureOutput(output), {
-        DAILY_BRIEF_SOURCE_REGISTRY_PATH: registryPath,
-        DAILY_BRIEF_ARCHIVE_ROOT: archiveRoot
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
       });
 
       expect(output.join("\n")).toContain(`success: Daily Brief archive exists for ${currentDate()}.`);
@@ -51,17 +63,14 @@ describe("workflow CLI commands", () => {
   it("runs a low-signal daily workflow through configured roots", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-run-once-"));
     const registryPath = join(directory, "sources.yaml");
-    const archiveRoot = join(directory, "briefs");
-    const sourceItemRoot = join(directory, "source-items");
     const output: string[] = [];
 
     try {
       await writeFile(registryPath, "sources: []\n", "utf8");
 
       await runCli(["run-once"], captureOutput(output), {
-        DAILY_BRIEF_SOURCE_REGISTRY_PATH: registryPath,
-        DAILY_BRIEF_ARCHIVE_ROOT: archiveRoot,
-        DAILY_BRIEF_SOURCE_ITEM_ROOT: sourceItemRoot
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
       });
 
       const archiveLine = output.find((line) => line.startsWith("Daily Brief archived: "));
@@ -72,6 +81,28 @@ describe("workflow CLI commands", () => {
       expect(output.join("\n")).toContain("Pi events:");
       expect(archivePath).toBeTruthy();
       expect(await readFile(String(archivePath), "utf8")).toContain("low-signal day");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("uses --date for workflow artifact paths", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-date-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFile(registryPath, "sources: []\n", "utf8");
+
+      await runCli(["run-once", "--date", "2026-05-28"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
+      });
+
+      expect(output.find((line) => line.startsWith("Daily Brief archived: "))).toContain(
+        join(directory, "briefs", "2026", "05", "2026-05-28.md")
+      );
+      await expect(readdir(join(directory, "agent-runs", "2026", "05", "2026-05-28"))).resolves.toHaveLength(1);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
