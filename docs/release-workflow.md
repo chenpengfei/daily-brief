@@ -104,17 +104,18 @@ Before publishing, verify:
 - Agent Release Review Gate recommends approval or all findings are resolved.
 - npm credentials and GitHub credentials are available to the maintainer.
 - npm package state has been checked with `npm view @chenpengfei/daily-brief version`; first release should be unpublished, and later releases should show a version lower than the target Release Version.
-- `/tmp/daily-brief-release-notes.md` has been prepared from the matching `CHANGELOG.md` entry.
+- release notes have been prepared from the matching `CHANGELOG.md` entry.
 
-Publish in this order:
+Run the Human Release helper in preflight mode first:
 
 ```bash
-git checkout main
-git pull --ff-only
-git tag -a vX.Y.Z -m "vX.Y.Z"
-git push origin vX.Y.Z
-npm publish --access public
-gh release create vX.Y.Z --verify-tag --title "vX.Y.Z" --notes-file /tmp/daily-brief-release-notes.md
+npm run release:human -- --version X.Y.Z
+```
+
+After the maintainer confirms the preflight output, publish with explicit confirmation:
+
+```bash
+npm run release:human -- --version X.Y.Z --publish --yes --issue <release-checklist-issue-number>
 ```
 
 The GitHub Release notes should be derived from the `CHANGELOG.md` entry and include:
@@ -131,6 +132,8 @@ npm view @chenpengfei/daily-brief version
 npm install --prefix /tmp/daily-brief-public-smoke -g @chenpengfei/daily-brief@X.Y.Z --no-audit --no-fund
 /tmp/daily-brief-public-smoke/bin/daily-brief --help
 ```
+
+The Human Release helper performs this public installation verification after `npm publish` and GitHub Release creation.
 
 Record the npm version, GitHub Release URL, tag, and public install verification in the Release Checklist Issue.
 
