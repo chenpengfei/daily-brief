@@ -42,6 +42,11 @@ export function readModelConfig(path = resolveDailyBriefPaths().configPath): Dai
   return readDailyBriefConfig(path).model;
 }
 
+export function readConfiguredTimezone(path = resolveDailyBriefPaths().configPath): string | undefined {
+  const timezone = readDailyBriefConfig(path).timezone;
+  return typeof timezone === "string" && timezone.trim().length > 0 ? timezone.trim() : undefined;
+}
+
 export function writeModelConfig(config: DailyBriefModelConfig, path = resolveDailyBriefPaths().configPath): void {
   const current = readDailyBriefConfig(path);
   const next = {

@@ -1,6 +1,6 @@
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { SourceItem } from "../domain/index.js";
-import type { AgentRunArtifact } from "../storage/index.js";
+import type { AgentRunArtifact, AgentRunInputRefs } from "../storage/index.js";
 import { createStageModelRuntime, type StageModelRuntime } from "./model-stage-runtime.js";
 import { runAgentStage } from "./stage-runner.js";
 import {
@@ -20,6 +20,7 @@ export interface SourceItemUnderstandingOptions {
   modelRuntimeConfig: ModelRuntimeConfig;
   modelRuntimeEnv?: ModelRuntimeEnv;
   artifact?: AgentRunArtifact;
+  inputRefs?: AgentRunInputRefs;
   maxBatchCharacters?: number;
 }
 
@@ -61,6 +62,7 @@ export async function runSourceItemUnderstandingStage(
         stage: "understanding",
         artifact: input.artifact ?? createInMemoryArtifact(input.modelRuntimeConfig),
         inputRefs: {
+          ...(input.inputRefs ?? {}),
           sourceItemIds: batch.map((item) => item.id),
           batch: { index: index + 1, total: batches.length }
         },

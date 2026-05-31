@@ -18,10 +18,13 @@ import { collectSources } from "./collection/index.js";
 import { resolveConfiguredWebhookUrl } from "./discord/index.js";
 import {
   defaultModelConfig,
+  dateFromDateKey,
+  formatDateKey,
   formatSourceRegistry,
   loadSourceRegistry,
   putCredential,
   readDeliveryConfig,
+  readConfiguredTimezone,
   getCredential,
   resolveDailyBriefPaths,
   setSourceEnabled,
@@ -65,7 +68,7 @@ export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv 
   const workflowFlags = parseFlags(args.slice(1));
   const options = {
     ...optionsFromEnv(env),
-    ...readDateOption(workflowFlags)
+    ...readWorkflowDateOption(workflowFlags, env)
   };
 
   if (!command || command === "help" || command === "--help" || command === "-h") {
@@ -150,16 +153,20 @@ export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv 
   throw new Error(`Unknown command: ${command}`);
 }
 
-function readDateOption(flags: Record<string, string | undefined>): { date?: Date } {
-  if (!flags.date) {
-    return {};
+function readWorkflowDateOption(flags: Record<string, string | undefined>, env: CliEnv): { date: Date; dateKey: string } {
+  if (flags.date) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(flags.date)) {
+      throw new Error("--date must use YYYY-MM-DD");
+    }
+
+    return { date: dateFromDateKey(flags.date), dateKey: flags.date };
   }
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(flags.date)) {
-    throw new Error("--date must use YYYY-MM-DD");
-  }
+  const now = new Date();
+  const paths = resolveDailyBriefPaths(env);
+  const timezone = readConfiguredTimezone(paths.configPath) ?? env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  return { date: new Date(`${flags.date}T00:00:00.000Z`) };
+  return { date: now, dateKey: formatDateKey(now, timezone) };
 }
 
 async function assertWorkflowConfigured(sourceRegistryPath: string): Promise<void> {

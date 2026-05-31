@@ -1,10 +1,14 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../../src/cli.js";
 
 describe("workflow CLI commands", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("prints help with the supported Operational CLI commands", async () => {
     const output: string[] = [];
 
@@ -105,6 +109,35 @@ describe("workflow CLI commands", () => {
         join(directory, "briefs", "2026", "05", "2026-05-28.md")
       );
       await expect(readdir(join(directory, "agent-runs", "2026", "05", "2026-05-28"))).resolves.toHaveLength(1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("uses configured timezone for default workflow date paths", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-timezone-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-30T16:30:00.000Z"));
+      await writeFile(join(directory, "config.yaml"), "timezone: Asia/Shanghai\n", "utf8");
+      await writeFixtureRegistry(directory, registryPath);
+
+      await runCli(["run-once"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory,
+        ...fauxRuntimeEnv()
+      });
+
+      expect(output.find((line) => line.startsWith("Daily Brief archived: "))).toContain(
+        join(directory, "briefs", "2026", "05", "2026-05-31.md")
+      );
+      await expect(readdir(join(directory, "agent-runs", "2026", "05", "2026-05-31"))).resolves.toHaveLength(1);
+      await expect(readFile(join(directory, "source-items", "2026", "05", "2026-05-31.jsonl"), "utf8")).resolves.toContain(
+        "fixture-blog:item-1"
+      );
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

@@ -1,5 +1,6 @@
 import type { Source } from "../domain/index.js";
 import type { SourceItem } from "../domain/index.js";
+import { formatDateKey } from "../config/index.js";
 
 export type SignalType = "architecture" | "ai-coding" | "tool-repo" | "risk";
 
@@ -35,6 +36,7 @@ export interface SourceCoverage {
 
 export interface DailyBrief {
   date: Date;
+  dateKey?: string;
   executiveSummary: string;
   signals: Signal[];
   sourceCoverage: SourceCoverage;
@@ -47,8 +49,10 @@ export interface DailyBriefInput {
 
 export interface GenerateDailyBriefInput {
   date: Date;
+  dateKey?: string;
   sourceItems: SourceItem[];
   partialFailures?: string[];
+  sourceCount?: number;
 }
 
 export function generateLowSignalDailyBrief(input: DailyBriefInput): string {
@@ -94,6 +98,7 @@ export function generateDailyBrief(input: GenerateDailyBriefInput): DailyBrief {
 
   return {
     date: input.date,
+    ...(input.dateKey ? { dateKey: input.dateKey } : {}),
     executiveSummary:
       signals.length === 0
         ? "今天是 low-signal day：没有足够 Source-grounded 的 Agent Architecture 或 AI Coding Signals。"
@@ -101,7 +106,7 @@ export function generateDailyBrief(input: GenerateDailyBriefInput): DailyBrief {
     signals,
     sourceCoverage: {
       sourceItemCount: input.sourceItems.length,
-      sourceCount: sourceIds.size,
+      sourceCount: input.sourceCount ?? sourceIds.size,
       partialFailures: input.partialFailures ?? []
     }
   };
@@ -116,7 +121,7 @@ function isBriefEligibleSourceItem(item: SourceItem): boolean {
 }
 
 export function renderDailyBriefMarkdown(brief: DailyBrief): string {
-  const date = brief.date.toISOString().slice(0, 10);
+  const date = brief.dateKey ?? formatDateKey(brief.date);
 
   return [
     `# Daily Brief - ${date}`,

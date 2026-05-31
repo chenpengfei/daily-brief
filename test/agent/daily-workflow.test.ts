@@ -197,6 +197,74 @@ describe("daily workflow orchestration", () => {
     }
   });
 
+  it("propagates partial collection failures into brief coverage and artifact input refs", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-workflow-"));
+    const registryPath = join(directory, "sources.yaml");
+    const fixturePath = join(directory, "fixture.json");
+    const sourceItemRoot = join(directory, "source-items");
+    const archiveRoot = join(directory, "briefs");
+    const agentRunRoot = join(directory, "agent-runs");
+    const date = new Date("2026-05-31T07:00:00.000Z");
+
+    try {
+      await writeFile(
+        fixturePath,
+        JSON.stringify({
+          items: [
+            {
+              id: "item-1",
+              url: "https://example.com/agent-runtime",
+              title: "Agent runtime patterns",
+              analyzableText: "Agent Architecture notes about tool execution."
+            }
+          ]
+        }),
+        "utf8"
+      );
+      await writeFile(
+        registryPath,
+        [
+          "sources:",
+          "  - id: fixture-good",
+          "    platform: blog",
+          "    adapter: fixture",
+          `    target: ${fixturePath}`,
+          "    enabled: true",
+          "    notes: Good fixture",
+          "  - id: fixture-missing",
+          "    platform: blog",
+          "    adapter: fixture",
+          `    target: ${join(directory, "missing.json")}`,
+          "    enabled: true",
+          "    notes: Missing fixture"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const result = await runOnce({
+        date,
+        dateKey: "2026-05-31",
+        sourceRegistryPath: registryPath,
+        sourceItemRoot,
+        archiveRoot,
+        agentRunRoot,
+        modelRuntimeEnv: fauxRuntimeEnv()
+      });
+      const archived = await readFile(result.archivePath, "utf8");
+      const artifact = JSON.parse(await readFile(String(result.agentRunArtifactPath), "utf8"));
+
+      expect(result.coreFailure).toBeUndefined();
+      expect(archived).toContain("Processed 1 Source Items from 2 Sources.");
+      expect(archived).toContain("Partial failures: fixture-missing:");
+      expect(artifact.inputRefs.collectionFailures).toEqual([
+        expect.objectContaining({ sourceId: "fixture-missing" })
+      ]);
+      expect(artifact.stages.every((stage: { inputRefs: { collectionFailures?: unknown[] } }) => stage.inputRefs.collectionFailures?.length === 1)).toBe(true);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("does not archive when the audit stage rejects unsupported narrative claims", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-workflow-"));
     const sourceItemRoot = join(directory, "source-items");

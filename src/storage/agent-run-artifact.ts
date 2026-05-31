@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { AgentStageName, AgentStageOutput } from "../agent/stage-contracts.js";
 import type { ModelRuntimeConfig } from "../agent/model-runtime-config.js";
-import { resolveDailyBriefPaths } from "../config/index.js";
+import { formatDateKey, resolveDailyBriefPaths } from "../config/index.js";
 
 export interface AgentRunArtifact {
   schemaVersion: 1;
@@ -24,6 +24,10 @@ export interface AgentRunArtifact {
 export interface AgentRunInputRefs {
   sourceItemIds?: string[];
   signalIds?: string[];
+  collectionFailures?: Array<{
+    sourceId: string;
+    reason: string;
+  }>;
   batch?: {
     index: number;
     total: number;
@@ -61,13 +65,14 @@ export function createAgentRunArtifact(input: {
   inputRefs?: AgentRunInputRefs;
   runId?: string;
   startedAt?: Date;
+  dateKey?: string;
 }): AgentRunArtifact {
   const startedAt = input.startedAt ?? new Date();
 
   return {
     schemaVersion: 1,
     runId: input.runId ?? createAgentRunId(startedAt),
-    date: input.date.toISOString().slice(0, 10),
+    date: input.dateKey ?? formatDateKey(input.date),
     startedAt: startedAt.toISOString(),
     model: {
       provider: input.modelRuntimeConfig.provider,
@@ -82,13 +87,14 @@ export function createAgentRunArtifact(input: {
 export async function writeAgentRunArtifact(
   artifact: AgentRunArtifact,
   date: Date,
-  root = resolveDailyBriefPaths().agentRunRoot
+  root = resolveDailyBriefPaths().agentRunRoot,
+  dateKey?: string
 ): Promise<WrittenAgentRunArtifact> {
   const completed = {
     ...artifact,
     completedAt: artifact.completedAt ?? new Date().toISOString()
   };
-  const path = agentRunArtifactPath(date, completed.runId, root);
+  const path = agentRunArtifactPath(date, completed.runId, root, dateKey ?? completed.date);
 
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(completed, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
@@ -100,8 +106,8 @@ export async function readAgentRunArtifact(path: string): Promise<AgentRunArtifa
   return JSON.parse(await readFile(path, "utf8")) as AgentRunArtifact;
 }
 
-export function agentRunArtifactPath(date: Date, runId: string, root = resolveDailyBriefPaths().agentRunRoot): string {
-  const datePart = date.toISOString().slice(0, 10);
+export function agentRunArtifactPath(date: Date, runId: string, root = resolveDailyBriefPaths().agentRunRoot, dateKey?: string): string {
+  const datePart = dateKey ?? formatDateKey(date);
   const [year, month] = datePart.split("-");
 
   if (!year || !month) {

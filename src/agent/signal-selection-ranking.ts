@@ -1,7 +1,7 @@
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { Signal, SignalCitation, SignalSummary, SignalType } from "../brief/index.js";
 import type { SourceItem } from "../domain/index.js";
-import type { AgentRunArtifact } from "../storage/index.js";
+import type { AgentRunArtifact, AgentRunInputRefs } from "../storage/index.js";
 import { createStageModelRuntime, type StageModelRuntime } from "./model-stage-runtime.js";
 import type { ModelRuntimeConfig, ModelRuntimeEnv } from "./model-runtime-config.js";
 import { runAgentStage } from "./stage-runner.js";
@@ -20,6 +20,7 @@ export interface SignalSelectionRankingInput {
   artifact: AgentRunArtifact;
   modelRuntimeConfig?: ModelRuntimeConfig;
   modelRuntimeEnv?: ModelRuntimeEnv;
+  inputRefs?: AgentRunInputRefs;
   maxSignals?: number;
 }
 
@@ -60,7 +61,7 @@ export async function runSignalSelectionAndRankingStages(
   const selectionStage = await runAgentStage<SelectionStageOutput>({
     stage: "selection",
     artifact: input.artifact,
-    inputRefs: { sourceItemIds: input.sourceItems.map((item) => item.id) },
+    inputRefs: { ...(input.inputRefs ?? {}), sourceItemIds: input.sourceItems.map((item) => item.id) },
     validationContext: { sourceItemIds: input.sourceItems.map((item) => item.id) },
     execute: async () => selectionResponse.text
   });
@@ -75,7 +76,11 @@ export async function runSignalSelectionAndRankingStages(
   const rankingStage = await runAgentStage<RankingStageOutput>({
     stage: "ranking",
     artifact: input.artifact,
-    inputRefs: { sourceItemIds: unique(merged.flatMap((signal) => signal.sourceItemIds)), signalIds: merged.map((signal) => signal.signalId) },
+    inputRefs: {
+      ...(input.inputRefs ?? {}),
+      sourceItemIds: unique(merged.flatMap((signal) => signal.sourceItemIds)),
+      signalIds: merged.map((signal) => signal.signalId)
+    },
     validationContext: { signalIds: merged.map((signal) => signal.signalId) },
     execute: async () => rankingResponse.text
   });

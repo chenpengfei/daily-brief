@@ -21,6 +21,7 @@ import { runAgentStage } from "./stage-runner.js";
 
 export interface RunOnceOptions {
   date?: Date;
+  dateKey?: string;
   sourceRegistryPath?: string;
   archiveRoot?: string;
   agentRunRoot?: string;
@@ -29,6 +30,9 @@ export interface RunOnceOptions {
   discordFetchImpl?: typeof fetch;
   discordTemplatePath?: string;
   modelRuntimeEnv?: ModelRuntimeEnv;
+  sourceCount?: number;
+  partialFailures?: string[];
+  collectionFailures?: Array<{ sourceId: string; reason: string }>;
 }
 
 export interface RunOnceResult {
@@ -56,11 +60,13 @@ export interface GenerateOnceResult {
 
 export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResult> {
   const date = options.date ?? new Date();
+  const dateKey = options.dateKey;
   let collection: CollectionRunResult;
 
   try {
     collection = await collectSources({
       date,
+      ...(dateKey ? { dateKey } : {}),
       fetchedAt: date,
       ...(options.sourceRegistryPath ? { sourceRegistryPath: options.sourceRegistryPath } : {}),
       ...(options.sourceItemRoot ? { sourceItemRoot: options.sourceItemRoot } : {})
@@ -87,7 +93,7 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
     };
   }
 
-  const collectedItems = await readSourceItems(date, options.sourceItemRoot);
+  const collectedItems = await readSourceItems(date, options.sourceItemRoot, dateKey);
   const collectionFailure = classifyCollectionCoreFailure(collection, collectedItems.length);
 
   if (collectionFailure) {
@@ -108,7 +114,18 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
     };
   }
 
-  const generated = await generateOnce(options);
+  const collectionFailures = collectionFailureRefs(collection);
+  const generated = await generateOnce({
+    ...options,
+    ...(dateKey ? { dateKey } : {}),
+    sourceCount: collection.sources.length,
+    ...(collectionFailures.length > 0
+      ? {
+          partialFailures: collectionFailures.map((failure) => `${failure.sourceId}: ${failure.reason}`),
+          collectionFailures
+        }
+      : {})
+  });
   const delivery = await deliverOnce({
     ...options,
     date,
@@ -130,7 +147,8 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
 
 export async function generateOnce(options: RunOnceOptions = {}): Promise<GenerateOnceResult> {
   const date = options.date ?? new Date();
-  const sourceItems = await readSourceItems(date, options.sourceItemRoot);
+  const dateKey = options.dateKey;
+  const sourceItems = await readSourceItems(date, options.sourceItemRoot, dateKey);
   const modelRuntimeConfig = readModelRuntimeConfig(options.modelRuntimeEnv);
 
   if (sourceItems.length === 0) {
@@ -141,21 +159,33 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
     throw new Error(`Model runtime is not ready:\n${modelRuntimeConfig.issues.map((issue) => `- ${issue}`).join("\n")}`);
   }
 
-  const baseBrief = generateDailyBrief({ date, sourceItems });
+  const baseBrief = generateDailyBrief({
+    date,
+    ...(dateKey ? { dateKey } : {}),
+    sourceItems,
+    ...(options.partialFailures ? { partialFailures: options.partialFailures } : {}),
+    ...(options.sourceCount ? { sourceCount: options.sourceCount } : {})
+  });
   const artifact = createAgentRunArtifact({
     date,
+    ...(dateKey ? { dateKey } : {}),
     modelRuntimeConfig,
     inputRefs: {
       sourceItemIds: sourceItems.map((item) => item.id),
-      signalIds: baseBrief.signals.map((signal) => signal.id)
+      signalIds: baseBrief.signals.map((signal) => signal.id),
+      ...(options.collectionFailures ? { collectionFailures: options.collectionFailures } : {})
     }
   });
 
   try {
+    const collectionInputRefs = options.collectionFailures
+      ? { collectionFailures: options.collectionFailures }
+      : undefined;
     const understanding = await runSourceItemUnderstandingStage({
       sourceItems,
       modelRuntimeConfig,
       artifact,
+      ...(collectionInputRefs ? { inputRefs: collectionInputRefs } : {}),
       ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
     });
     const selected = await runSignalSelectionAndRankingStages({
@@ -163,6 +193,7 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
       annotations: understanding.annotations,
       artifact,
       modelRuntimeConfig,
+      ...(collectionInputRefs ? { inputRefs: collectionInputRefs } : {}),
       ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
     });
     const selectedBrief: DailyBrief = {
@@ -184,6 +215,7 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
       artifact,
       date,
       inputRefs: {
+        ...(options.collectionFailures ? { collectionFailures: options.collectionFailures } : {}),
         sourceItemIds: sourceItems.map((item) => item.id),
         signalIds: narrative.brief.signals.map((signal) => signal.id)
       },
@@ -209,12 +241,13 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
       sourceItems,
       artifact,
       modelRuntimeConfig,
+      ...(collectionInputRefs ? { inputRefs: collectionInputRefs } : {}),
       ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
     });
-    const writtenArtifact = options.agentRunRoot ? await writeAgentRunArtifact(artifact, date, options.agentRunRoot) : undefined;
+    const writtenArtifact = options.agentRunRoot ? await writeAgentRunArtifact(artifact, date, options.agentRunRoot, dateKey) : undefined;
     const markdown = renderDailyBriefMarkdown(audited.brief);
     const piResult = await renderBriefThroughPiRuntime(markdown);
-    const archived = await writeBriefArchive(piResult.markdown, date, options.archiveRoot);
+    const archived = await writeBriefArchive(piResult.markdown, date, options.archiveRoot, dateKey);
 
     return {
       archivePath: archived.path,
@@ -232,11 +265,17 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
     };
 
     if (options.agentRunRoot) {
-      await writeAgentRunArtifact(artifact, date, options.agentRunRoot);
+      await writeAgentRunArtifact(artifact, date, options.agentRunRoot, dateKey);
     }
 
     throw error;
   }
+}
+
+function collectionFailureRefs(collection: CollectionRunResult): Array<{ sourceId: string; reason: string }> {
+  return collection.sources
+    .filter((source) => source.status === "failed")
+    .map((source) => ({ sourceId: source.sourceId, reason: source.reason ?? "Unknown failure" }));
 }
 
 function classifyCollectionCoreFailure(
@@ -269,7 +308,7 @@ export async function deliverOnce(
   options: RunOnceOptions & { brief?: DailyBrief; archivePath?: string } = {}
 ): Promise<DiscordDeliveryResult> {
   const date = options.date ?? new Date();
-  const archivePath = options.archivePath ?? briefArchivePath(date, options.archiveRoot);
+  const archivePath = options.archivePath ?? briefArchivePath(date, options.archiveRoot, options.dateKey);
 
   try {
     await readFile(archivePath, "utf8");
@@ -281,7 +320,8 @@ export async function deliverOnce(
     options.brief ??
     generateDailyBrief({
       date,
-      sourceItems: await readSourceItems(date, options.sourceItemRoot)
+      ...(options.dateKey ? { dateKey: options.dateKey } : {}),
+      sourceItems: await readSourceItems(date, options.sourceItemRoot, options.dateKey)
     });
 
   return deliverDiscordNotification(

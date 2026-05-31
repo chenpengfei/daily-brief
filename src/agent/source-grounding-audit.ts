@@ -1,7 +1,7 @@
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { DailyBrief } from "../brief/index.js";
 import type { SourceItem } from "../domain/index.js";
-import type { AgentRunArtifact } from "../storage/index.js";
+import type { AgentRunArtifact, AgentRunInputRefs } from "../storage/index.js";
 import { createStageModelRuntime, type StageModelRuntime } from "./model-stage-runtime.js";
 import type { ModelRuntimeConfig, ModelRuntimeEnv } from "./model-runtime-config.js";
 import { runAgentStage } from "./stage-runner.js";
@@ -23,6 +23,7 @@ export async function runSourceGroundingAuditStage(input: {
   artifact: AgentRunArtifact;
   modelRuntimeConfig?: ModelRuntimeConfig;
   modelRuntimeEnv?: ModelRuntimeEnv;
+  inputRefs?: AgentRunInputRefs;
   allowRepair?: boolean;
 }): Promise<{ brief: DailyBrief; audit: AuditStageOutput; repairAttempts: number }> {
   const modelRuntimeConfig = input.modelRuntimeConfig ?? {
@@ -31,7 +32,14 @@ export async function runSourceGroundingAuditStage(input: {
     ready: true,
     issues: []
   };
-  const first = await recordAudit(input.brief, input.sourceItems, input.artifact, modelRuntimeConfig, input.modelRuntimeEnv ?? process.env);
+  const first = await recordAudit(
+    input.brief,
+    input.sourceItems,
+    input.artifact,
+    modelRuntimeConfig,
+    input.modelRuntimeEnv ?? process.env,
+    input.inputRefs
+  );
 
   if (first.status === "passed") {
     return { brief: input.brief, audit: first, repairAttempts: 0 };
@@ -45,7 +53,8 @@ async function recordAudit(
   sourceItems: SourceItem[],
   artifact: AgentRunArtifact,
   modelRuntimeConfig: ModelRuntimeConfig,
-  modelRuntimeEnv: ModelRuntimeEnv
+  modelRuntimeEnv: ModelRuntimeEnv,
+  inputRefs: AgentRunInputRefs | undefined
 ): Promise<AuditStageOutput> {
   const sourceItemIds = sourceItems.map((item) => item.id);
   const signalIds = brief.signals.map((signal) => signal.id);
@@ -59,7 +68,7 @@ async function recordAudit(
   const result = await runAgentStage<AuditStageOutput>({
     stage: "audit",
     artifact,
-    inputRefs: { sourceItemIds, signalIds },
+    inputRefs: { ...(inputRefs ?? {}), sourceItemIds, signalIds },
     validationContext: { sourceItemIds, signalIds },
     execute: async () => response.text
   });
