@@ -12,6 +12,70 @@ _Avoid_: Chatbot, one-off script, generic RSS reader
 The intended implementation foundation for the Daily Brief Agent MVP, based on `earendil-works/pi` and especially its agent package/runtime concepts. The Pi Agent Runtime should own agent orchestration, tool execution, state management, and event streaming even when the MVP could be implemented as a simpler pipeline, because practicing Agent architecture is part of the project's purpose; natural-language control and skill routing are deferred until a V2 Control TUI exists.
 _Avoid_: Custom pipeline only, TUI router, one-off orchestration script
 
+**Agent Stage**:
+A bounded LLM-backed processing step inside the Daily Brief Agent, executed through the Pi Agent Runtime from Source-grounded inputs to structured outputs and observable events. An Agent Stage is not an independent Agent, a separate source of truth, or a replacement for deterministic collection, storage, rendering, or delivery code.
+_Avoid_: Separate agent, one-off model call, custom pipeline step
+
+**Agent-Driven Brief Generation**:
+The rule that Daily Brief generation decisions after Source Item collection are driven by Agent Stages rather than deterministic fallback logic. If a required Agent Stage cannot run or returns invalid output, the Daily Brief Agent should treat the run as an analysis failure instead of producing a normal Daily Brief from templates or keyword-only decisions.
+_Avoid_: Template fallback, keyword-only brief generation, silent degradation
+
+**Agent Generation Sequence**:
+The ordered set of required Agent Stages that turns collected Source Items into a Daily Brief: Source Item understanding, Signal selection, Signal ranking, Signal narrative, and Source-grounding audit. The sequence is stage-oriented rather than a single monolithic prompt so each decision boundary can be validated and audited.
+_Avoid_: One-shot prompt, hidden chain, markdown-first generation
+
+**Analysis Failure**:
+A failure after Source Item collection where a required Agent Stage cannot produce valid Source-grounded output for Daily Brief generation. An Analysis Failure should not create a normal Brief Archive entry; it should be reported as a workflow failure rather than hidden behind fallback content.
+_Avoid_: Low-signal day, partial source failure, degraded normal brief
+
+**LLM Provider**:
+The configured model access path used by required Agent Stages during real Daily Brief generation. The Daily Brief Agent should treat ChatGPT/Codex OAuth, standard OpenAI API, and OpenAI-compatible providers as provider choices behind the Pi Agent Runtime abstraction, while deterministic faux responses remain limited to tests and local contract checks.
+_Avoid_: Test model, hard-coded model backend, unauthenticated model call
+
+**LLM Provider Configuration**:
+The user-controlled operational choice of which LLM Provider and model the Daily Brief Agent uses for Agent Stages. LLM Provider Configuration belongs to the Operational CLI and runtime environment, not the Source Registry, and should keep provider secrets separate from ordinary project configuration.
+_Avoid_: Source configuration, hard-coded provider, committed secret
+
+**User Configuration Directory**:
+The per-user location where an installed Daily Brief Agent stores personal runtime configuration files such as Source Registry, LLM Provider Configuration, and credential state. The project repository may include examples and defaults, but user-specific configuration belongs outside the repository and should remain separate from generated Daily Brief data.
+_Avoid_: Project config, committed registry, generated artifact store
+
+**User Data Directory**:
+The per-user location where an installed Daily Brief Agent stores generated artifacts and local working data, such as Source Item Store entries, Agent Run Artifacts, and Brief Archive entries. User data is separate from configuration so growing generated outputs can be moved, backed up, pruned, or synced without changing Source and provider settings.
+_Avoid_: User Configuration Directory, committed archive, cache-only scratch space
+
+**Model Credential Store**:
+The user-level storage for LLM Provider secrets, Delivery Channel secrets, OAuth tokens, API keys, webhooks, and refreshable credentials used by Agent Stages and delivery. The Model Credential Store is separate from project configuration and Source Registry so credentials are not committed or mixed with collection scope.
+_Avoid_: Source Registry, committed config file, `.env` as primary storage, shared Codex CLI auth file
+
+**Structured Agent Output**:
+The machine-validated JSON output produced by an Agent Stage before any reader-facing Markdown is rendered. Structured Agent Output must reference existing Source Items and Signals explicitly; invalid JSON, missing required fields, or impossible citations make the run an Analysis Failure.
+_Avoid_: Free-form Markdown from the model, best-effort parsing, implicit citations
+
+**Source Item Understanding Stage**:
+An Agent Stage that turns collected Source Items into Source-grounded interpretation for later Signal decisions. It explains what a Source Item appears to claim, how it relates to Focus Areas, and what evidence boundaries apply without performing open-ended research.
+_Avoid_: Open research, raw scraping, final brief writing
+
+**Signal Selection Stage**:
+An Agent Stage that decides which understood Source Items should become candidate Signals for a Daily Brief. It includes exclusion reasons for weak, irrelevant, duplicate, or unsupported items rather than relying only on keyword matches.
+_Avoid_: Keyword filter only, source collection, final ranking
+
+**Signal Ranking Stage**:
+An Agent Stage that ranks candidate Signals for inclusion in Top Signals using explainable importance judgments. It should prioritize relevance to Focus Areas and source-grounded actionability over platform popularity alone.
+_Avoid_: Trending rank, engagement score, opaque ordering
+
+**Signal Narrative Stage**:
+An Agent Stage that writes the reader-facing explanation for selected Signals, including what the Signal is, what it is not, a minimal example, and why it matters. It writes from cited Source Items and must not turn unsupported inference into fact.
+_Avoid_: Generic summary, marketing copy, unsupported analysis
+
+**Source-grounding Audit Stage**:
+An Agent Stage that checks whether selected Signals and reader-facing narrative remain supported by cited Source Items. It should identify missing citations, unsupported claims, overconfident trend interpretation, and open-ended research leakage before a Daily Brief is archived.
+_Avoid_: Copy editing, source collection, best-effort warning only
+
+**Agent Run Artifact**:
+A machine-readable record of one Daily Brief generation run's Agent Stage inputs, structured outputs, decisions, warnings, model metadata, and degradation paths. Agent Run Artifacts support replay, audit, and debugging, but they are not the reader-facing Brief Archive or the Source Item Store.
+_Avoid_: Brief Archive, Source Item Store, model transcript dump
+
 **Source**:
 A manually defined origin that the Daily Brief Agent is allowed to monitor, such as an X account, blog, GitHub repository or organization, YouTube channel, feed-like endpoint, trend list, topic, or bounded search. The system processes configured Sources; it does not autonomously add new Sources.
 _Avoid_: Lead, recommendation, discovered account
@@ -21,7 +85,7 @@ The content platform or medium a Source belongs to, such as X, blog, GitHub, or 
 _Avoid_: Fetch Adapter, scraper, source target
 
 **Source Registry**:
-The manually maintained list of Sources the Daily Brief Agent is allowed to monitor, stored at `config/sources.yaml`. The Source Registry is the source of truth for collection scope; the agent reads it, and explicit manual edits or Operational CLI commands may modify it. A Source has an id, Source Platform, Fetch Adapter, Source Target, enabled state, and notes; Sources do not carry priority, kind, fallback adapters, concrete tool names, automatic discovery rules, or secrets.
+The manually maintained list of Sources the Daily Brief Agent is allowed to monitor, normally stored as user-specific configuration in the User Configuration Directory. The Source Registry is the source of truth for collection scope; the agent reads it, and explicit manual edits or Operational CLI commands may modify it. A Source has an id, Source Platform, Fetch Adapter, Source Target, enabled state, and notes; Sources do not carry priority, kind, fallback adapters, concrete tool names, automatic discovery rules, or secrets.
 _Avoid_: Discovered source list, recommendation list, implicit subscriptions
 
 **Source Target**:
@@ -37,12 +101,12 @@ A top-level subject the Daily Brief Agent prioritizes when judging whether conte
 _Avoid_: Generic AI news, general productivity, model hype
 
 **Signal**:
-A content item from one or more Source Items that is worth considering for a Daily Brief because it relates to a Focus Area. Signals should contain architectural insight, engineering practice, concrete examples, tooling patterns, evaluation lessons, or ecosystem changes that affect Agent Architecture or AI Coding. A Signal carries its own selection reason, such as `why_it_matters`, rather than relying on a separate Agent Analysis layer.
+A content item from one or more Source Items that is worth considering for a Daily Brief because it relates to a Focus Area. Signals should contain architectural insight, engineering practice, concrete examples, tooling patterns, evaluation lessons, or ecosystem changes that affect Agent Architecture or AI Coding. A Signal carries its own reader-facing explanation, such as `为什么重要`, rather than relying on a separate Agent Analysis layer.
 _Avoid_: Raw post, saved link, generic AI update
 
-**Signal Type**:
-The lightweight category used to explain why a Signal belongs in Top Signals. MVP Signal Types include `architecture`, `ai-coding`, `tool-repo`, and `risk`; these types do not create separate Daily Brief sections.
-_Avoid_: Brief section, source platform, priority
+**Signal Lens**:
+The reader-facing description of what a Signal is about, expressed through a Focus Area and a Direction rather than a fixed type enum. The current Focus Areas are Agent Architecture and AI Coding; current Directions include advanced tools, long-running tasks, continuous learning, self-improvement, and human-Agent boundaries.
+_Avoid_: Rigid enum, brief section, source platform, priority
 
 **Signal Score**:
 An explainable importance judgment used to rank and filter Signals for the Daily Brief. Signal Score should consider relevance, novelty, actionability, credibility, and momentum across Sources, but relevance to a Focus Area comes before popularity or trend momentum. The Daily Brief should show concise selection reasons and sources rather than exposing Signal Score as a raw number.
@@ -53,7 +117,7 @@ A recurring reader-facing summary produced once per day from the available Signa
 _Avoid_: News feed, link dump, exhaustive digest
 
 **Daily Brief Template**:
-The Markdown structure for an MVP Daily Brief: title with date, Executive Summary, Top Signals, Source Coverage, and Sources. Tool, repository, architecture, AI Coding, and risk content are represented as Signal Types inside Top Signals rather than separate sections.
+The Markdown structure for an MVP Daily Brief: title with date, Executive Summary, Top Signals, Source Coverage, and Sources. Signal Lens fields such as `领域` and `方向` are represented inside Top Signals rather than separate sections.
 _Avoid_: Link dump, opaque summary, unsupported research section
 
 **Daily Brief Cadence**:
@@ -129,8 +193,12 @@ The short Discord Delivery format for a generated Daily Brief: date, a few headl
 _Avoid_: Full daily brief, feedback UI, control command
 
 **Operational CLI**:
-The MVP control surface for running and inspecting Daily Brief operations from the terminal. The Operational CLI can collect Source updates, generate or regenerate a Daily Brief, deliver the Discord notification, run the full daily workflow once, inspect status, and manage Sources explicitly.
-_Avoid_: Chat product, Discord control, V2 Control TUI
+The installed terminal entry point for manually running, inspecting, and configuring Daily Brief operations. The Operational CLI can run setup, manage Sources, configure LLM Providers, trigger Manual Runs, inspect status, and expose stable commands that external schedulers may invoke.
+_Avoid_: Chat product, long-running gateway, Discord control surface
+
+**Setup Wizard**:
+The interactive Operational CLI flow, exposed as `daily-brief setup`, that prepares an installed Daily Brief Agent for first use by creating user files and guiding required configuration choices. The Setup Wizard may configure Sources, LLM Provider access, and Delivery Channels, while scheduled workflow commands remain non-interactive.
+_Avoid_: Scheduled run, hidden auto-init, source discovery
 
 **Domain Module**:
 The TypeScript module that expresses the shared project language as types and pure domain rules. The Domain Module mirrors MVP concepts from this glossary, such as Source, Source Item, Signal, and Daily Brief, but it does not perform I/O, fetching, delivery, CLI rendering, or agent orchestration.

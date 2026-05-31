@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { loadSourceRegistry } from "../config/index.js";
+import { loadSourceRegistry, resolveDailyBriefPaths } from "../config/index.js";
 import type { SourceCollectionResult } from "../collection/index.js";
 
 export type WorkflowHealth = "success" | "partial-failure" | "core-failure";
@@ -32,6 +32,7 @@ export interface EvaluateWorkflowStatusInput {
 
 export interface OperationalStatusOptions {
   date?: Date;
+  dateKey?: string;
   sourceRegistryPath?: string;
   archiveRoot?: string;
 }
@@ -105,21 +106,21 @@ export async function getOperationalStatus(options: OperationalStatusOptions = {
     });
   }
 
-  const archivePath = briefArchivePath(date, options.archiveRoot ?? "briefs");
+  const archivePath = briefArchivePath(date, options.archiveRoot ?? resolveDailyBriefPaths().briefArchiveRoot, options.dateKey);
 
   try {
     await readFile(archivePath, "utf8");
   } catch {
     return {
       health: "partial-failure",
-      message: `No Daily Brief archived for ${date.toISOString().slice(0, 10)} yet.`,
+      message: `No Daily Brief archived for ${options.dateKey ?? date.toISOString().slice(0, 10)} yet.`,
       materialPartialFailures: []
     };
   }
 
   return {
     health: "success",
-    message: `Daily Brief archive exists for ${date.toISOString().slice(0, 10)}.`,
+    message: `Daily Brief archive exists for ${options.dateKey ?? date.toISOString().slice(0, 10)}.`,
     materialPartialFailures: []
   };
 }
@@ -131,8 +132,8 @@ function isMaterialPartialFailure(message: string): boolean {
   return !nonMaterialPatterns.some((pattern) => normalized.includes(pattern));
 }
 
-function briefArchivePath(date: Date, root: string): string {
-  const datePart = date.toISOString().slice(0, 10);
+function briefArchivePath(date: Date, root: string, dateKey?: string): string {
+  const datePart = dateKey ?? date.toISOString().slice(0, 10);
   const [year, month] = datePart.split("-");
 
   if (!year || !month) {

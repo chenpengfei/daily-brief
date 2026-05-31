@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { formatDateKey, resolveDailyBriefPaths } from "../config/index.js";
 import type { SourceItem } from "../domain/index.js";
 
 export interface AppendSourceItemsResult {
@@ -8,8 +9,8 @@ export interface AppendSourceItemsResult {
   skipped: SourceItem[];
 }
 
-export function sourceItemStorePath(date: Date, root = "data/source-items"): string {
-  const datePart = date.toISOString().slice(0, 10);
+export function sourceItemStorePath(date: Date, root = resolveDailyBriefPaths().sourceItemRoot, dateKey?: string): string {
+  const datePart = dateKey ?? formatDateKey(date);
   const [year, month] = datePart.split("-");
 
   if (!year || !month) {
@@ -22,10 +23,11 @@ export function sourceItemStorePath(date: Date, root = "data/source-items"): str
 export async function appendSourceItems(
   items: SourceItem[],
   date: Date,
-  root = "data/source-items"
+  root = resolveDailyBriefPaths().sourceItemRoot,
+  dateKey?: string
 ): Promise<AppendSourceItemsResult> {
-  const path = sourceItemStorePath(date, root);
-  const existing = await readSourceItems(date, root);
+  const path = sourceItemStorePath(date, root, dateKey);
+  const existing = await readSourceItems(date, root, dateKey);
   const seenIds = new Set(existing.map((item) => item.id));
   const seenHashes = new Set(existing.map((item) => item.contentHash));
   const written: SourceItem[] = [];
@@ -51,8 +53,8 @@ export async function appendSourceItems(
   return { path, written, skipped };
 }
 
-export async function readSourceItems(date: Date, root = "data/source-items"): Promise<SourceItem[]> {
-  const path = sourceItemStorePath(date, root);
+export async function readSourceItems(date: Date, root = resolveDailyBriefPaths().sourceItemRoot, dateKey?: string): Promise<SourceItem[]> {
+  const path = sourceItemStorePath(date, root, dateKey);
   let contents: string;
 
   try {

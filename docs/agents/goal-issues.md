@@ -47,10 +47,28 @@ Create new Goal Issues with `needs-triage` first. Move a Goal Issue to `ready-fo
 
 Local Markdown drafts are not official Goal Issues. If GitHub issue creation is unavailable, keep the local file as an issue body draft and do not treat it as part of the execution queue until it is published to GitHub with the appropriate label.
 
+## Specification checklist
+
+Before publishing or promoting a Goal Issue, verify:
+
+- The parent PRD Issue is linked, or the local draft explicitly says `Not published yet`.
+- The Outcome describes one user-visible or system-visible capability.
+- Scope Includes and Excludes are both present and do not contradict the PRD non-goals.
+- Every Acceptance Criterion uses Given/When/Then or equivalent observable wording.
+- Every Acceptance Criterion names Evidence.
+- Evidence Required lists commands, tests, touched files or modules, and logs/status artifacts when relevant.
+- Current State Notes distinguish existing behavior from likely gaps.
+- Dependencies match the Goal Map blockers.
+- The issue is not only an internal helper, type, file, or refactor.
+- The issue does not combine multiple independent product capabilities.
+- Publication Status is `Not published` for local drafts or references the actual GitHub Issue after publication.
+- Ready For Agent remains `No` until the checklist passes and the issue is labeled `ready-for-agent`.
+
 ## Required sections
 
 Each Goal Issue must include:
 
+- **Parent PRD Issue**: the GitHub issue number or link for the PRD direction/index issue, once it exists.
 - **Outcome**: the user-visible or system-visible capability that exists when the goal is complete.
 - **Scope**: what this goal includes and intentionally excludes.
 - **Acceptance Criteria**: observable facts that can be judged true or false.
@@ -60,6 +78,10 @@ Each Goal Issue must include:
 Use this Markdown template for every `ready-for-agent` Goal Issue:
 
 ```md
+## Parent PRD Issue
+
+<GitHub issue link or "Not published yet" while drafting locally.>
+
 ## Outcome
 
 <The user-visible or system-visible capability that exists when the goal is complete.>
@@ -100,7 +122,8 @@ Use this Markdown template for every `ready-for-agent` Goal Issue:
 ## PRD Traceability
 
 - PRD:
-- User Stories:
+- User Stories / Observable Behaviors:
+- Requirement Areas:
 - Out of Scope Protected:
 - Dependencies:
 ```

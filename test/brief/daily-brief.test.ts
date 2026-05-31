@@ -20,6 +20,12 @@ describe("Daily Brief generation", () => {
         id: "signal:https://example.com/agent-runtime",
         type: "architecture",
         title: "Agent runtime state management",
+        summary: {
+          whatItIs:
+            "它是一个 Source-grounded Signal：A concrete Agent Architecture note about state, tool execution, and event streaming",
+          whatItIsNot: "不是未引用来源支撑的通用观点；当前只代表它在本次 Source Items 中形成了 architecture Signal。",
+          minimalExample: "最小地看，用它对照一个 Agent runtime 的 state、tool execution 或 workflow 边界。"
+        },
         whyItMatters: "它提供了 Agent Architecture 的具体实现或设计线索，值得进一步阅读原文。",
         citations: [
           {
@@ -108,7 +114,66 @@ describe("Daily Brief generation", () => {
     expect(markdown).toContain("## Sources");
     expect(markdown).toContain("Partial failures: x-search rate limited");
     expect(markdown).toContain("- blog:item-1: [Agent runtime state management](https://example.com/agent-runtime)");
-    expect(markdown).toContain("- why_it_matters: 它提供了 Agent Architecture");
+    expect(markdown).toContain(
+      "- 是什么: 它是一个 Source-grounded Signal：A concrete Agent Architecture note about state, tool execution, and event streaming"
+    );
+    expect(markdown).toContain(
+      "- 不是什么: 不是未引用来源支撑的通用观点；当前只代表它在本次 Source Items 中形成了 architecture Signal。"
+    );
+    expect(markdown).toContain(
+      "- 最小例子: 最小地看，用它对照一个 Agent runtime 的 state、tool execution 或 workflow 边界。"
+    );
+    expect(markdown).toContain("- 领域: 未标注");
+    expect(markdown).toContain("- 方向: 未标注");
+    expect(markdown).toContain("- 为什么重要: 它提供了 Agent Architecture");
+    expect(markdown).toContain("- 引用: blog:item-1");
+    expect(markdown).not.toContain("- Type:");
+    expect(markdown).not.toContain("why_it_matters");
+  });
+
+  it("renders Agent lens values with Chinese labels", () => {
+    const brief = generateDailyBrief({
+      date: new Date("2026-05-28T07:00:00.000Z"),
+      sourceItems: [sourceItem({ id: "blog:item-1" })]
+    });
+    brief.signals[0] = {
+      ...brief.signals[0]!,
+      focusAreas: ["Agent 架构", "AI Coding"],
+      directions: ["先进工具", "人与 Agent 的边界"]
+    };
+
+    const markdown = renderDailyBriefMarkdown(brief);
+
+    expect(markdown).toContain("- 领域: Agent 架构 / AI Coding");
+    expect(markdown).toContain("- 方向: 先进工具 / 人与 Agent 的边界");
+    expect(markdown).toContain("- blog:item-1: [Agent runtime state management](https://example.com/agent-runtime)");
+  });
+
+  it("uses GitHub repository descriptions for Signal summaries", () => {
+    const brief = generateDailyBrief({
+      date: new Date("2026-05-28T07:00:00.000Z"),
+      sourceItems: [
+        sourceItem({
+          id: "github:item-1",
+          sourceId: "github-trending-daily",
+          platform: "github",
+          title: "anthropics/claude-code",
+          url: "https://github.com/anthropics/claude-code",
+          analyzableText:
+            "Claude Code is an agentic coding tool that lives in your terminal and helps you code faster. Momentum: +319 stars today.",
+          metadata: {
+            description: "Claude Code is an agentic coding tool that lives in your terminal and helps you code faster."
+          }
+        })
+      ]
+    });
+
+    expect(brief.signals[0]?.summary).toEqual({
+      whatItIs:
+        "它是一个 GitHub repository：Claude Code is an agentic coding tool that lives in your terminal and helps you code faster",
+      whatItIsNot: "不是对项目成熟度或适用性的背书；当前只代表它在本次 Source Items 中形成了 tool-repo Signal。",
+      minimalExample: "最小地看，先阅读 anthropics/claude-code 的 README 或最小使用路径，再判断它是否适合当前工具链。"
+    });
   });
 
   it("classifies all MVP Signal Types without creating separate sections", () => {

@@ -58,7 +58,7 @@ describe("workflow status", () => {
   it("creates a Discord-ready Core Workflow Failure notification", () => {
     const notification = createCoreWorkflowFailureNotification({
       kind: "unreadable-source-registry",
-      message: "config/sources.yaml is invalid"
+      message: "~/.daily-brief/sources.yaml is invalid"
     });
 
     expect(notification).toContain("Daily Brief failed");

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { runOnce } from "../../src/agent/index.js";
 
 describe("run-once", () => {
-  it("archives a low-signal Daily Brief through the Pi runtime when no Sources are configured", async () => {
+  it("does not archive a false low-signal Daily Brief when no Sources are configured", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-run-"));
     const configDirectory = join(directory, "config");
     const archiveRoot = join(directory, "briefs");
@@ -21,17 +21,10 @@ describe("run-once", () => {
         archiveRoot
       });
 
-      const archived = await readFile(result.archivePath, "utf8");
-
-      expect(result.archivePath).toBe(join(archiveRoot, "2026", "05", "2026-05-28.md"));
+      expect(result.coreFailure).toMatchObject({ kind: "no-usable-source-items" });
+      expect(result.archivePath).toBe("");
       expect(result.sourceCount).toBe(0);
-      expect(result.piEvents).toContain("agent_start");
-      expect(archived).toContain("# Daily Brief - 2026-05-28");
-      expect(archived).toContain("## Executive Summary");
-      expect(archived).toContain("## Top Signals");
-      expect(archived).toContain("## Source Coverage");
-      expect(archived).toContain("## Sources");
-      expect(archived).toContain("low-signal day");
+      await expect(readFile(join(archiveRoot, "2026", "05", "2026-05-28.md"), "utf8")).rejects.toThrow("ENOENT");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

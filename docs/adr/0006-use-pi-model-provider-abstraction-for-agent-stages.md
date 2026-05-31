@@ -1,0 +1,3 @@
+# Use Pi Model Provider Abstraction for Agent Stages
+
+Daily Brief Agent Stages will call LLMs through the Pi model/provider/API/OAuth abstraction instead of hand-rolling provider transports inside Daily Brief. The default recommended model access path is `openai-codex` with `gpt-5.5`, but the system must also support other Pi-backed providers such as OpenAI API, DeepSeek, and OpenAI-compatible custom endpoints. This keeps provider choice configurable through the Operational CLI, avoids baking ChatGPT/Codex OAuth into the domain model, and prevents Daily Brief from owning brittle request payloads, backend URLs, headers, or token refresh behavior that Pi already abstracts.

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { DailyBrief } from "../brief/index.js";
+import { getCredential, readDeliveryConfig, resolveDailyBriefPaths } from "../config/index.js";
 import { createCoreWorkflowFailureNotification, type CoreWorkflowFailure } from "../workflow/index.js";
 
 export interface DiscordNotificationInput {
@@ -11,6 +12,7 @@ export interface DiscordNotificationInput {
 export interface DiscordDeliveryOptions {
   webhookUrl?: string;
   fetchImpl?: typeof fetch;
+  env?: Partial<Record<string, string | undefined>>;
 }
 
 export type DiscordDeliveryResult =
@@ -49,7 +51,7 @@ async function sendDiscordContent(
   content: string,
   options: DiscordDeliveryOptions
 ): Promise<DiscordDeliveryResult> {
-  const webhookUrl = options.webhookUrl ?? process.env.DISCORD_WEBHOOK_URL;
+  const webhookUrl = options.webhookUrl ?? resolveConfiguredWebhookUrl(options.env ?? process.env);
 
   if (!webhookUrl) {
     return { status: "skipped", reason: "DISCORD_WEBHOOK_URL is not configured" };
@@ -73,6 +75,22 @@ async function sendDiscordContent(
   } catch (error) {
     return { status: "failed", reason: error instanceof Error ? error.message : String(error) };
   }
+}
+
+export function resolveConfiguredWebhookUrl(env: Partial<Record<string, string | undefined>> = process.env): string | undefined {
+  if (env.DISCORD_WEBHOOK_URL) {
+    return env.DISCORD_WEBHOOK_URL;
+  }
+
+  const paths = resolveDailyBriefPaths(env);
+  const config = readDeliveryConfig(paths.configPath);
+
+  if (!config?.enabled || !config.webhookRef) {
+    return undefined;
+  }
+
+  const credential = getCredential(config.webhookRef, paths.authPath);
+  return credential?.type === "webhook" && credential.provider === "discord" ? credential.webhookUrl : undefined;
 }
 
 function buildSummaryBullets(brief: DailyBrief): string {
