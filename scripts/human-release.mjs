@@ -141,8 +141,11 @@ function checkGitHubState() {
   const release = run("gh", ["release", "view", tag, "--json", "tagName,url"]);
   if (release.status === 0) {
     fail(`GitHub Release already exists for ${tag}`);
-  } else {
+  } else if (isGitHubReleaseNotFound(release)) {
     ok(`GitHub Release is absent: ${tag}`);
+  } else {
+    const outputText = `${release.stdout}\n${release.stderr}`.trim();
+    fail(`GitHub Release state check failed for ${tag}: ${outputText}`);
   }
 
   const head = output("git", ["rev-parse", "HEAD"]).trim();
@@ -271,6 +274,11 @@ function compareSemver(left, right) {
     if (diff !== 0) return diff;
   }
   return 0;
+}
+
+function isGitHubReleaseNotFound(result) {
+  const outputText = `${result.stdout}\n${result.stderr}`;
+  return /release not found/i.test(outputText);
 }
 
 function commandLine(command, commandArgs) {
