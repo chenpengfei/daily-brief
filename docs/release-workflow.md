@@ -13,9 +13,10 @@ Publication commands are never run before the Human Release Gate.
 ## Release Invariants
 
 - The Release Version uses SemVer: npm/package uses `X.Y.Z`, while GitHub tag and release title use `vX.Y.Z`.
-- Release Pull Requests prepare release materials only: package metadata, version, Changelog, User Manual, release workflow documentation, and evidence.
-- Release Pull Requests should not include product code fixes.
-- Product-code Release Blockers leave the release line and are handled through a separate issue or fix PR.
+- Release Pull Requests normally prepare release materials only: package metadata, version, Changelog, User Manual, release workflow documentation, and evidence.
+- Release Pull Requests should not include ordinary product code fixes.
+- Product-code Release Blockers normally leave the release line and are handled through a separate issue or fix PR.
+- A minimal Release-Blocking Fix may remain in the Release Pull Request only when it is required to prove installability or publishability for the same release, is explicitly recorded in the Release Checklist Issue and Release Pull Request, and is called out for focused Agent Release Review.
 - Published tags and npm versions are immutable. Post-Release Incidents use documentation and patch releases instead of moved tags or silent rollback.
 
 ## Gate 1: Agent Release Preparation
@@ -65,7 +66,12 @@ DAILY_BRIEF_DATA_HOME=/tmp/daily-brief-data \
 
 Use a unique temporary directory for real runs. Do not install into the maintainer's real global npm prefix or real `~/.daily-brief` during the smoke test.
 
-If a product-code blocker appears, stop the release preparation, record the blocker, create or link the fix issue, and restart this gate after the fix is merged.
+If a product-code blocker appears, stop the release preparation and classify it:
+
+- If the blocker is not required to prove this release's installability or publishability, record the blocker, create or link the fix issue, and restart this gate after the fix is merged.
+- If the blocker is a minimal Release-Blocking Fix, keep it in the Release Pull Request only after recording the reason, affected files, extra tests, smoke evidence, and review focus in the Release Checklist Issue and Release Pull Request.
+
+Release-Blocking Fixes are exceptions, not a way to bundle unrelated behavior change into a release. The Agent Release Review Gate must review the exception explicitly.
 
 ## Gate 2: Agent Release Review
 
@@ -82,6 +88,7 @@ The reviewing Agent must use a review stance and inspect:
 - Release CI Workflow result.
 - Local evidence for `npm run release:check`.
 - Local evidence for the Release Install Smoke Test.
+- Any Release-Blocking Fix exception, including affected files, scope justification, targeted tests, smoke evidence, and whether a separate fix PR would be safer before release.
 
 The reviewing Agent should report blocking findings first, with file and line references when possible. It may recommend approval or request fixes, but it must not publish the release or approve its own preparation work.
 
@@ -157,13 +164,16 @@ If GitHub Release is public but install verification fails, record the incident 
 - [ ] npm run release:publish:dry-run completed
 - [ ] Release Install Smoke Test completed with temporary npm prefix and Daily Brief homes
 - [ ] Release Blockers recorded or confirmed absent
+- [ ] Release-Blocking Fix exceptions recorded or confirmed absent
 
 ### Preparation Evidence
 
 - release:check:
 - publish dry-run:
 - npm pack output:
+- npm package state before publish:
 - install smoke test:
+- Release-Blocking Fix exception:
 - git status:
 - notes:
 
@@ -173,6 +183,7 @@ If GitHub Release is public but install verification fails, record the incident 
 - [ ] Release Pull Request reviewed
 - [ ] Release Checklist evidence reviewed
 - [ ] Release CI Workflow result reviewed
+- [ ] Release-Blocking Fix exceptions reviewed or confirmed absent
 - [ ] Review recommendation recorded
 
 ### Review Findings

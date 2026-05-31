@@ -217,8 +217,8 @@ The maintainer-facing documentation that defines the three Release Gates, requir
 _Avoid_: User Manual, operations notes, hidden chat procedure
 
 **Release Pull Request**:
-The pull request that prepares one Formal Release by updating the Release Version, package metadata, Changelog, User Manual, release workflow documentation, and readiness evidence before merging to `main`. A Release Pull Request should not include product code fixes; publication happens only after the Human Release Gate.
-_Avoid_: Feature PR, bug-fix PR, tag-only release, publish PR
+The pull request that prepares one Formal Release by updating the Release Version, package metadata, Changelog, User Manual, release workflow documentation, and readiness evidence before merging to `main`. A Release Pull Request normally should not include product code fixes; a narrow Release-Blocking Fix exception is allowed only when it is required to prove installability or publishability for the same release and is explicitly recorded for Agent Release Review. Publication happens only after the Human Release Gate.
+_Avoid_: Feature PR, ordinary bug-fix PR, tag-only release, publish PR
 
 **Formal Release**:
 A maintainer-approved release of the Daily Brief Agent that publishes both a GitHub Release and an npm registry version so users can install the Operational CLI through normal npm tooling. A Formal Release is distinct from a development checkpoint or an unpublished release candidate.
@@ -253,8 +253,12 @@ The isolated installation check that installs the Release Package into a tempora
 _Avoid_: Local tsx run, real global install, real user home mutation
 
 **Release Blocker**:
-A failed release check, missing evidence, product behavior defect, or documentation mismatch that prevents a release candidate from advancing to the next Release Gate. Product-code Release Blockers should leave the Release Pull Request and be resolved through a separate issue or fix PR before release preparation restarts.
-_Avoid_: Known limitation, release note, quick fix inside release PR
+A failed release check, missing evidence, product behavior defect, or documentation mismatch that prevents a release candidate from advancing to the next Release Gate. Product-code Release Blockers normally leave the Release Pull Request and are resolved through a separate issue or fix PR before release preparation restarts, unless they qualify as a narrow Release-Blocking Fix.
+_Avoid_: Known limitation, release note, unrelated quick fix inside release PR
+
+**Release-Blocking Fix**:
+A minimal product-code fix kept inside a Release Pull Request because the release cannot prove installability or publishability without it. A Release-Blocking Fix must be recorded in the Release Checklist Issue and Release Pull Request with its scope reason, affected files, targeted tests, smoke evidence, and Agent Release Review focus.
+_Avoid_: Ordinary product enhancement, opportunistic bug fix, hidden behavior change
 
 **Agent Release Review Gate**:
 The second Release Gate, where a human asks an Agent in an independent review context to review the Release Pull Request, release-facing content, and collected evidence against the release policy. This gate can recommend approval or request fixes, but it does not publish the release or let the preparing Agent approve its own work.
