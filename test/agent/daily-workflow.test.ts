@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { deliverOnce, generateOnce, runOnce } from "../../src/agent/index.js";
-import { readSourceItems } from "../../src/storage/index.js";
+import { appendSourceItems, readSourceItems } from "../../src/storage/index.js";
 
 describe("daily workflow orchestration", () => {
   it("runs collect -> generate -> archive -> deliver without duplicating rerun Signals", async () => {
@@ -50,14 +50,16 @@ describe("daily workflow orchestration", () => {
         sourceRegistryPath: registryPath,
         sourceItemRoot,
         archiveRoot,
-        agentRunRoot
+        agentRunRoot,
+        modelRuntimeEnv: fauxRuntimeEnv()
       });
       const secondRun = await runOnce({
         date,
         sourceRegistryPath: registryPath,
         sourceItemRoot,
         archiveRoot,
-        agentRunRoot
+        agentRunRoot,
+        modelRuntimeEnv: fauxRuntimeEnv()
       });
       const stored = await readSourceItems(date, sourceItemRoot);
       const archived = await readFile(firstRun.archivePath, "utf8");
@@ -101,7 +103,23 @@ describe("daily workflow orchestration", () => {
     const date = new Date("2026-05-28T07:00:00.000Z");
 
     try {
-      const generated = await generateOnce({ date, sourceItemRoot, archiveRoot });
+      await appendSourceItems(
+        [
+          {
+            id: "item-1",
+            sourceId: "source",
+            platform: "blog",
+            url: "https://example.com/agent-runtime",
+            title: "Agent runtime",
+            fetchedAt: date.toISOString(),
+            analyzableText: "Agent Architecture notes about tool execution.",
+            contentHash: "hash"
+          }
+        ],
+        date,
+        sourceItemRoot
+      );
+      const generated = await generateOnce({ date, sourceItemRoot, archiveRoot, modelRuntimeEnv: fauxRuntimeEnv() });
       const delivery = await deliverOnce({ date, sourceItemRoot, archiveRoot });
 
       expect(generated.archivePath).toBe(join(archiveRoot, "2026", "05", "2026-05-28.md"));
@@ -142,4 +160,81 @@ describe("daily workflow orchestration", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("fails when every enabled Source fails and no Source Items exist", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-workflow-"));
+    const registryPath = join(directory, "sources.yaml");
+    const archiveRoot = join(directory, "briefs");
+
+    try {
+      await writeFile(
+        registryPath,
+        [
+          "sources:",
+          "  - id: missing-fixture",
+          "    platform: blog",
+          "    adapter: fixture",
+          `    target: ${join(directory, "missing.json")}`,
+          "    enabled: true",
+          "    notes: Missing fixture"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const result = await runOnce({
+        date: new Date("2026-05-31T07:00:00.000Z"),
+        sourceRegistryPath: registryPath,
+        sourceItemRoot: join(directory, "source-items"),
+        archiveRoot,
+        modelRuntimeEnv: fauxRuntimeEnv()
+      });
+
+      expect(result.coreFailure).toMatchObject({ kind: "no-usable-source-items" });
+      expect(result.archivePath).toBe("");
+      await expect(readFile(join(archiveRoot, "2026", "05", "2026-05-31.md"), "utf8")).rejects.toThrow("ENOENT");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not archive when the audit stage rejects unsupported narrative claims", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-workflow-"));
+    const sourceItemRoot = join(directory, "source-items");
+    const archiveRoot = join(directory, "briefs");
+    const date = new Date("2026-05-28T07:00:00.000Z");
+
+    try {
+      await appendSourceItems(
+        [
+          {
+            id: "item-1",
+            sourceId: "source",
+            platform: "blog",
+            url: "https://example.com/agent-runtime",
+            title: "Agent runtime",
+            fetchedAt: date.toISOString(),
+            analyzableText: "Agent Architecture tool is guaranteed best in class.",
+            contentHash: "hash"
+          }
+        ],
+        date,
+        sourceItemRoot
+      );
+
+      await expect(generateOnce({ date, sourceItemRoot, archiveRoot, modelRuntimeEnv: fauxRuntimeEnv() })).rejects.toThrow(
+        "Source-grounding audit failed"
+      );
+      await expect(readFile(join(archiveRoot, "2026", "05", "2026-05-28.md"), "utf8")).rejects.toThrow("ENOENT");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
+
+function fauxRuntimeEnv() {
+  return {
+    DAILY_BRIEF_ALLOW_FAUX_PROVIDER: "true",
+    DAILY_BRIEF_MODEL_PROVIDER: "faux",
+    DAILY_BRIEF_MODEL: "faux-daily-brief-renderer"
+  };
+}

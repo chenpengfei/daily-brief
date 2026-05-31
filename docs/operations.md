@@ -61,7 +61,9 @@ daily-brief delivery configure --enabled true --webhook-url <url>
 daily-brief delivery status
 ```
 
-Secrets live in `~/.daily-brief/auth.json` or environment variables, never in `sources.yaml` or committed project files. Tests use the faux provider and mocked transports.
+Secrets live in `~/.daily-brief/auth.json` or environment variables, never in `sources.yaml` or committed project files. Installed CLI configuration does not accept the faux provider; faux is reserved for tests through an explicit test-only runtime gate.
+
+`run-once` does not archive a normal Daily Brief when every enabled Source fails or when no Source Items exist for the requested date. It reports a Core Workflow Failure instead, because a false low-signal brief would hide collection failure.
 
 ## GitHub Trending collection
 

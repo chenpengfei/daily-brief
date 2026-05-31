@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
   generateOnce,
+  buildOpenAICompatibleModel,
   loginModelCredential,
   readModelRuntimeConfig,
   resolveModelApiKey,
@@ -11,10 +12,28 @@ import {
 } from "../../src/agent/index.js";
 import { parseSourceRegistry } from "../../src/domain/index.js";
 import { putCredential, writeModelConfig } from "../../src/config/index.js";
+import { appendSourceItems } from "../../src/storage/index.js";
 
 describe("model runtime configuration", () => {
-  it("uses the faux provider by default so tests do not require live model secrets", () => {
+  it("requires an explicit model config by default instead of falling back to faux", () => {
     expect(readModelRuntimeConfig({})).toEqual({
+      provider: "openai-codex",
+      model: "gpt-5.5",
+      credentialRef: "openai-codex.default",
+      ready: false,
+      issues: expect.arrayContaining([expect.stringContaining("Model config not found")])
+    });
+  });
+
+  it("allows faux only through an explicit test-only env gate", () => {
+    expect(() => readModelRuntimeConfig({ DAILY_BRIEF_MODEL_PROVIDER: "faux" })).toThrow("only allowed");
+    expect(
+      readModelRuntimeConfig({
+        DAILY_BRIEF_ALLOW_FAUX_PROVIDER: "true",
+        DAILY_BRIEF_MODEL_PROVIDER: "faux",
+        DAILY_BRIEF_MODEL: "faux-daily-brief-renderer"
+      })
+    ).toEqual({
       provider: "faux",
       model: "faux-daily-brief-renderer",
       ready: true,
@@ -77,6 +96,15 @@ describe("model runtime configuration", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it("builds openai-compatible models with the configured baseUrl", () => {
+    expect(buildOpenAICompatibleModel({ model: "deepseek-chat", baseUrl: "https://api.deepseek.com/v1" })).toMatchObject({
+      provider: "openai-compatible",
+      api: "openai-completions",
+      id: "deepseek-chat",
+      baseUrl: "https://api.deepseek.com/v1"
+    });
   });
 
   it("uses the selected stored credentialRef without deleting unused credentials", async () => {
@@ -175,11 +203,29 @@ describe("model runtime configuration", () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-model-runtime-"));
 
     try {
+      const date = new Date("2026-05-28T07:00:00.000Z");
+      await appendSourceItems(
+        [
+          {
+            id: "item-1",
+            sourceId: "source",
+            platform: "blog",
+            url: "https://example.com/agent-runtime",
+            title: "Agent runtime",
+            fetchedAt: date.toISOString(),
+            analyzableText: "Agent Architecture notes about tool execution.",
+            contentHash: "hash"
+          }
+        ],
+        date,
+        join(directory, "source-items")
+      );
       const result = await generateOnce({
-        date: new Date("2026-05-28T07:00:00.000Z"),
+        date,
         sourceItemRoot: join(directory, "source-items"),
         archiveRoot: join(directory, "briefs"),
         modelRuntimeEnv: {
+          DAILY_BRIEF_ALLOW_FAUX_PROVIDER: "true",
           DAILY_BRIEF_MODEL_PROVIDER: "faux",
           DAILY_BRIEF_MODEL: "faux-daily-brief-renderer"
         }

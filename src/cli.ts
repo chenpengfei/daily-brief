@@ -76,6 +76,9 @@ export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv 
   if (command === "run-once") {
     await assertWorkflowConfigured(options.sourceRegistryPath);
     const result = await runOnce(options);
+    if (result.coreFailure) {
+      throw new Error(`Core Workflow Failure: ${result.coreFailure.kind}\n${result.coreFailure.message}`);
+    }
     io.stdout(`Daily Brief archived: ${result.archivePath}`);
     io.stdout(`Sources read: ${result.sourceCount}`);
     io.stdout(`Source Items read: ${result.sourceItemCount}`);
@@ -509,13 +512,11 @@ function readProviderFlag(value: string): ModelProvider {
     return "openai-codex";
   }
 
-  if (
-    provider === "faux" ||
-    provider === "openai-codex" ||
-    provider === "openai" ||
-    provider === "deepseek" ||
-    provider === "openai-compatible"
-  ) {
+  if (provider === "faux") {
+    throw new Error("Unsupported model provider for installed CLI: faux is test-only");
+  }
+
+  if (provider === "openai-codex" || provider === "openai" || provider === "deepseek" || provider === "openai-compatible") {
     return provider;
   }
 
@@ -584,6 +585,7 @@ function optionsFromEnv(env: CliEnv) {
     sourceItemRoot: paths.sourceItemRoot,
     agentRunRoot: paths.agentRunRoot,
     archiveRoot: paths.briefArchiveRoot,
+    modelRuntimeEnv: env,
     ...(discordWebhookUrl ? { discordWebhookUrl } : {}),
     ...(env.DAILY_BRIEF_DISCORD_TEMPLATE_PATH ? { discordTemplatePath: env.DAILY_BRIEF_DISCORD_TEMPLATE_PATH } : {})
   };

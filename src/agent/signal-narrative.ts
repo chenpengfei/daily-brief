@@ -1,18 +1,8 @@
 import { Agent } from "@earendil-works/pi-agent-core";
-import {
-  fauxAssistantMessage,
-  getModel,
-  registerBuiltInApiProviders,
-  registerFauxProvider,
-  type Model
-} from "@earendil-works/pi-ai";
 import type { DailyBrief, Signal, SignalSummary } from "../brief/index.js";
 import type { SourceItem } from "../domain/index.js";
-import {
-  resolveModelApiKey,
-  type ModelRuntimeConfig,
-  type ModelRuntimeEnv
-} from "./model-runtime-config.js";
+import { createStageModelRuntime, type StageModelRuntime } from "./model-stage-runtime.js";
+import type { ModelRuntimeConfig, ModelRuntimeEnv } from "./model-runtime-config.js";
 
 interface SignalNarrative {
   signalId: string;
@@ -64,7 +54,11 @@ export async function enrichDailyBriefNarrativeWithAgent(input: {
   modelRuntimeEnv?: ModelRuntimeEnv;
 }): Promise<SignalNarrativeEnrichmentResult> {
   const request = buildNarrativeRequest(input.brief, input.sourceItems);
-  const runtime = createNarrativeRuntime(input.modelRuntimeConfig, input.modelRuntimeEnv ?? process.env, request);
+  const runtime = createStageModelRuntime({
+    config: input.modelRuntimeConfig,
+    env: input.modelRuntimeEnv ?? process.env,
+    fauxResponse: JSON.stringify(buildFauxNarrativeResponse(request))
+  });
 
   try {
     const response = await runNarrativeAgent(request, runtime);
@@ -116,90 +110,9 @@ function buildNarrativeRequest(brief: DailyBrief, sourceItems: SourceItem[]): Na
   };
 }
 
-function createNarrativeRuntime(
-  config: ModelRuntimeConfig,
-  env: ModelRuntimeEnv,
-  request: NarrativeRequest
-): {
-  model: Model<any>;
-  getApiKey?: (provider: string) => string | Promise<string | undefined> | undefined;
-  onPayload?: (payload: unknown) => unknown;
-  thinkingLevel: "off" | "low";
-  unregister?: () => void;
-} {
-  if (config.provider === "faux") {
-    const provider = registerFauxProvider({
-      models: [{ id: config.model, name: config.model }]
-    });
-    provider.setResponses([fauxAssistantMessage(JSON.stringify(buildFauxNarrativeResponse(request)))]);
-
-    return {
-      model: provider.getModel(config.model) ?? provider.getModel(),
-      thinkingLevel: "off",
-      unregister: provider.unregister
-    };
-  }
-
-  registerBuiltInApiProviders();
-
-  if (config.provider === "openai-codex") {
-    return {
-      model: getModel("openai-codex", config.model as never) as Model<any>,
-      getApiKey: (provider) => (provider === "openai-codex" ? resolveModelApiKey(config, env) : undefined),
-      thinkingLevel: "low"
-    };
-  }
-
-  if (config.provider === "deepseek") {
-    return {
-      model: getModel("deepseek", config.model as never) as Model<any>,
-      getApiKey: (provider) => (provider === "deepseek" ? resolveModelApiKey(config, env) : undefined),
-      thinkingLevel: "off"
-    };
-  }
-
-  if (config.provider === "openai-compatible") {
-    return {
-      model: buildOpenAICompatibleModel(config),
-      getApiKey: (provider) => (provider === "openai-compatible" ? resolveModelApiKey(config, env) : undefined),
-      thinkingLevel: "off"
-    };
-  }
-
-  return {
-    model: getModel("openai", config.model as never) as Model<any>,
-    getApiKey: (provider) => (provider === "openai" ? resolveModelApiKey(config, env) : undefined),
-    thinkingLevel: "off"
-  };
-}
-
-function buildOpenAICompatibleModel(config: ModelRuntimeConfig): Model<any> {
-  if (!config.baseUrl) {
-    throw new Error("baseUrl is required for openai-compatible model runtime");
-  }
-
-  return {
-    id: config.model,
-    name: config.model,
-    api: "openai-completions",
-    provider: "openai-compatible",
-    baseUrl: config.baseUrl,
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128000,
-    maxTokens: 4096
-  };
-}
-
 async function runNarrativeAgent(
   request: NarrativeRequest,
-  runtime: {
-    model: Model<any>;
-    getApiKey?: (provider: string) => string | Promise<string | undefined> | undefined;
-    onPayload?: (payload: unknown) => unknown;
-    thinkingLevel: "off" | "low";
-  }
+  runtime: StageModelRuntime
 ): Promise<{ text: string; events: string[] }> {
   const events: string[] = [];
   const agent = new Agent({
@@ -214,8 +127,7 @@ async function runNarrativeAgent(
       thinkingLevel: runtime.thinkingLevel
     },
     sessionId: "daily-brief-signal-narrative",
-    ...(runtime.getApiKey ? { getApiKey: runtime.getApiKey } : {}),
-    ...(runtime.onPayload ? { onPayload: runtime.onPayload } : {})
+    ...(runtime.getApiKey ? { getApiKey: runtime.getApiKey } : {})
   });
 
   agent.subscribe((event) => {

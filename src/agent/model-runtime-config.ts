@@ -63,10 +63,11 @@ export function readModelRuntimeConfig(
 
   if (!config) {
     return {
-      provider: "faux",
-      model: "faux-daily-brief-renderer",
-      ready: true,
-      issues: []
+      provider: "openai-codex",
+      model: "gpt-5.5",
+      credentialRef: "openai-codex.default",
+      ready: false,
+      issues: [`Model config not found: ${configPath}. Run daily-brief setup and daily-brief model configure/login first.`]
     };
   }
 
@@ -247,7 +248,7 @@ function readEnvModelConfig(env: ModelRuntimeEnv):
     return undefined;
   }
 
-  const normalizedProvider = normalizeProvider(provider);
+  const normalizedProvider = normalizeProvider(provider, env);
 
   return {
     provider: normalizedProvider,
@@ -257,20 +258,22 @@ function readEnvModelConfig(env: ModelRuntimeEnv):
   };
 }
 
-function normalizeProvider(value: string): ModelProvider {
+function normalizeProvider(value: string, env: ModelRuntimeEnv): ModelProvider {
   const provider = value.trim().toLowerCase();
 
   if (provider === "codex" || provider === "hermes") {
     return "openai-codex";
   }
 
-  if (
-    provider === "faux" ||
-    provider === "openai-codex" ||
-    provider === "openai" ||
-    provider === "deepseek" ||
-    provider === "openai-compatible"
-  ) {
+  if (provider === "faux") {
+    if (env.DAILY_BRIEF_ALLOW_FAUX_PROVIDER === "true") {
+      return provider;
+    }
+
+    throw new Error("DAILY_BRIEF_MODEL_PROVIDER=faux is only allowed when DAILY_BRIEF_ALLOW_FAUX_PROVIDER=true");
+  }
+
+  if (provider === "openai-codex" || provider === "openai" || provider === "deepseek" || provider === "openai-compatible") {
     return provider;
   }
 

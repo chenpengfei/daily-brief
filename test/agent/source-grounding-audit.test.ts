@@ -29,7 +29,7 @@ describe("Source-grounding Audit Stage", () => {
     ).rejects.toThrow(AnalysisFailureError);
   });
 
-  it("performs at most one repair attempt and records remaining violations", async () => {
+  it("fails without deterministic repair and records violations", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-audit-"));
     const artifact = createArtifact();
 
@@ -41,11 +41,11 @@ describe("Source-grounding Audit Stage", () => {
           artifact,
           allowRepair: true
         })
-      ).rejects.toThrow("after repair");
+      ).rejects.toThrow("Source-grounding audit failed");
 
       const written = await writeAgentRunArtifact(artifact, new Date("2026-05-28T07:00:00.000Z"), directory);
       const serialized = await readFile(written.path, "utf8");
-      expect(JSON.parse(serialized).stages.filter((stage: { stage: string }) => stage.stage === "audit")).toHaveLength(2);
+      expect(JSON.parse(serialized).stages.filter((stage: { stage: string }) => stage.stage === "audit")).toHaveLength(1);
       expect(serialized).toContain("unsupported overconfident claim");
     } finally {
       await rm(directory, { recursive: true, force: true });

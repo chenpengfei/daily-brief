@@ -1,19 +1,13 @@
 import { Agent } from "@earendil-works/pi-agent-core";
-import {
-  fauxAssistantMessage,
-  getModel,
-  registerBuiltInApiProviders,
-  registerFauxProvider,
-  type Model
-} from "@earendil-works/pi-ai";
 import type { SourceItem } from "../domain/index.js";
 import type { AgentRunArtifact } from "../storage/index.js";
+import { createStageModelRuntime, type StageModelRuntime } from "./model-stage-runtime.js";
 import { runAgentStage } from "./stage-runner.js";
 import {
   AgentStageValidationError,
   type UnderstandingStageOutput
 } from "./stage-contracts.js";
-import { resolveModelApiKey, type ModelRuntimeConfig, type ModelRuntimeEnv } from "./model-runtime-config.js";
+import type { ModelRuntimeConfig, ModelRuntimeEnv } from "./model-runtime-config.js";
 
 export interface SourceItemUnderstandingResult {
   annotations: UnderstandingStageOutput["sourceItemAnnotations"];
@@ -54,7 +48,11 @@ export async function runSourceItemUnderstandingStage(
 
   for (const [index, batch] of batches.entries()) {
     const request = buildUnderstandingRequest(batch);
-    const runtime = createUnderstandingRuntime(input.modelRuntimeConfig, input.modelRuntimeEnv ?? process.env, request);
+    const runtime = createStageModelRuntime({
+      config: input.modelRuntimeConfig,
+      env: input.modelRuntimeEnv ?? process.env,
+      fauxResponse: JSON.stringify(buildFauxUnderstandingOutput(request))
+    });
 
     try {
       const response = await runUnderstandingAgent(request, runtime);
@@ -130,61 +128,9 @@ function buildUnderstandingRequest(sourceItems: SourceItem[]): UnderstandingRequ
   };
 }
 
-function createUnderstandingRuntime(
-  config: ModelRuntimeConfig,
-  env: ModelRuntimeEnv,
-  request: UnderstandingRequest
-): {
-  model: Model<any>;
-  getApiKey?: (provider: string) => string | Promise<string | undefined> | undefined;
-  thinkingLevel: "off" | "low";
-  unregister?: () => void;
-} {
-  if (config.provider === "faux") {
-    const provider = registerFauxProvider({
-      models: [{ id: config.model, name: config.model }]
-    });
-    provider.setResponses([fauxAssistantMessage(JSON.stringify(buildFauxUnderstandingOutput(request)))]);
-
-    return {
-      model: provider.getModel(config.model) ?? provider.getModel(),
-      thinkingLevel: "off",
-      unregister: provider.unregister
-    };
-  }
-
-  registerBuiltInApiProviders();
-
-  if (config.provider === "openai-codex") {
-    return {
-      model: getModel("openai-codex", config.model as never) as Model<any>,
-      getApiKey: (provider) => (provider === "openai-codex" ? resolveModelApiKey(config, env) : undefined),
-      thinkingLevel: "low"
-    };
-  }
-
-  if (config.provider === "deepseek") {
-    return {
-      model: getModel("deepseek", config.model as never) as Model<any>,
-      getApiKey: (provider) => (provider === "deepseek" ? resolveModelApiKey(config, env) : undefined),
-      thinkingLevel: "off"
-    };
-  }
-
-  return {
-    model: getModel("openai", config.model as never) as Model<any>,
-    getApiKey: (provider) => (provider === "openai" ? resolveModelApiKey(config, env) : undefined),
-    thinkingLevel: "off"
-  };
-}
-
 async function runUnderstandingAgent(
   request: UnderstandingRequest,
-  runtime: {
-    model: Model<any>;
-    getApiKey?: (provider: string) => string | Promise<string | undefined> | undefined;
-    thinkingLevel: "off" | "low";
-  }
+  runtime: StageModelRuntime
 ): Promise<{ text: string; events: string[] }> {
   const events: string[] = [];
   const agent = new Agent({

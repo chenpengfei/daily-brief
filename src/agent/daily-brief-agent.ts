@@ -87,6 +87,27 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
     };
   }
 
+  const collectedItems = await readSourceItems(date, options.sourceItemRoot);
+  const collectionFailure = classifyCollectionCoreFailure(collection, collectedItems.length);
+
+  if (collectionFailure) {
+    const delivery = await deliverCoreFailureNotification(collectionFailure, {
+      ...(options.discordWebhookUrl ? { webhookUrl: options.discordWebhookUrl } : {}),
+      ...(options.discordFetchImpl ? { fetchImpl: options.discordFetchImpl } : {})
+    });
+
+    return {
+      archivePath: "",
+      markdown: "",
+      sourceCount: collection.sources.length,
+      sourceItemCount: collectedItems.length,
+      piEvents: [],
+      collection,
+      delivery,
+      coreFailure: collectionFailure
+    };
+  }
+
   const generated = await generateOnce(options);
   const delivery = await deliverOnce({
     ...options,
@@ -112,6 +133,10 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
   const sourceItems = await readSourceItems(date, options.sourceItemRoot);
   const modelRuntimeConfig = readModelRuntimeConfig(options.modelRuntimeEnv);
 
+  if (sourceItems.length === 0) {
+    throw new Error("No usable Source Items found for generation; Daily Brief will not archive a false low-signal brief.");
+  }
+
   if (!modelRuntimeConfig.ready) {
     throw new Error(`Model runtime is not ready:\n${modelRuntimeConfig.issues.map((issue) => `- ${issue}`).join("\n")}`);
   }
@@ -134,7 +159,9 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
   const selected = await runSignalSelectionAndRankingStages({
     sourceItems,
     annotations: understanding.annotations,
-    artifact
+    artifact,
+    modelRuntimeConfig,
+    ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
   });
   const selectedBrief: DailyBrief = {
     ...baseBrief,
@@ -179,7 +206,8 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
     brief: narrative.brief,
     sourceItems,
     artifact,
-    allowRepair: true
+    modelRuntimeConfig,
+    ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
   });
   const writtenArtifact = options.agentRunRoot ? await writeAgentRunArtifact(artifact, date, options.agentRunRoot) : undefined;
   const markdown = renderDailyBriefMarkdown(audited.brief);
@@ -191,10 +219,36 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
     markdown: piResult.markdown,
     brief: audited.brief,
     sourceItemCount: sourceItems.length,
-    piEvents: [...understanding.events, ...narrative.events, ...piResult.events],
+    piEvents: [...understanding.events, ...selected.events, ...narrative.events, ...piResult.events],
     modelRuntimeConfig,
     ...((writtenArtifact?.path ?? narrativeStage.artifactPath) ? { agentRunArtifactPath: writtenArtifact?.path ?? narrativeStage.artifactPath } : {})
   };
+}
+
+function classifyCollectionCoreFailure(
+  collection: CollectionRunResult,
+  storedSourceItemCount: number
+): CoreWorkflowFailure | undefined {
+  const enabledResults = collection.sources.filter((source) => source.status !== "skipped");
+  const failedResults = enabledResults.filter((source) => source.status === "failed");
+
+  if (enabledResults.length === 0 && storedSourceItemCount === 0) {
+    return {
+      kind: "no-usable-source-items",
+      message: "No enabled Sources produced Source Items; Daily Brief will not generate a false low-signal brief."
+    };
+  }
+
+  if (enabledResults.length > 0 && failedResults.length === enabledResults.length && storedSourceItemCount === 0) {
+    return {
+      kind: "no-usable-source-items",
+      message: `All enabled Sources failed and no Source Items exist for this date: ${failedResults
+        .map((source) => `${source.sourceId}: ${source.reason ?? "Unknown failure"}`)
+        .join("; ")}`
+    };
+  }
+
+  return undefined;
 }
 
 export async function deliverOnce(

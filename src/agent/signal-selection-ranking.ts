@@ -1,6 +1,9 @@
+import { Agent } from "@earendil-works/pi-agent-core";
 import type { Signal, SignalCitation, SignalSummary, SignalType } from "../brief/index.js";
 import type { SourceItem } from "../domain/index.js";
 import type { AgentRunArtifact } from "../storage/index.js";
+import { createStageModelRuntime, type StageModelRuntime } from "./model-stage-runtime.js";
+import type { ModelRuntimeConfig, ModelRuntimeEnv } from "./model-runtime-config.js";
 import { runAgentStage } from "./stage-runner.js";
 import type { SelectionStageOutput, RankingStageOutput, UnderstandingStageOutput } from "./stage-contracts.js";
 
@@ -8,41 +11,203 @@ export interface SignalSelectionRankingResult {
   signals: Signal[];
   selection: SelectionStageOutput;
   ranking: RankingStageOutput;
+  events: string[];
 }
 
 export interface SignalSelectionRankingInput {
   sourceItems: SourceItem[];
   annotations: UnderstandingStageOutput["sourceItemAnnotations"];
   artifact: AgentRunArtifact;
+  modelRuntimeConfig?: ModelRuntimeConfig;
+  modelRuntimeEnv?: ModelRuntimeEnv;
   maxSignals?: number;
+}
+
+interface SelectionRequest {
+  sourceItems: Array<{
+    id: string;
+    sourceId: string;
+    platform: SourceItem["platform"];
+    url: string;
+    title: string;
+    analyzableText: string;
+  }>;
+  annotations: UnderstandingStageOutput["sourceItemAnnotations"];
+}
+
+interface RankingRequest {
+  maxSignals: number;
+  candidateSignals: SelectionStageOutput["candidateSignals"];
 }
 
 export async function runSignalSelectionAndRankingStages(
   input: SignalSelectionRankingInput
 ): Promise<SignalSelectionRankingResult> {
-  const selectionRaw = buildSelectionOutput(input.sourceItems, input.annotations);
+  const modelRuntimeConfig = input.modelRuntimeConfig ?? {
+    provider: "faux" as const,
+    model: "faux-daily-brief-renderer",
+    ready: true,
+    issues: []
+  };
+  const modelRuntimeEnv = input.modelRuntimeEnv ?? process.env;
+  const selectionRequest = buildSelectionRequest(input.sourceItems, input.annotations);
+  const selectionRuntime = createStageModelRuntime({
+    config: modelRuntimeConfig,
+    env: modelRuntimeEnv,
+    fauxResponse: JSON.stringify(buildFauxSelectionOutput(selectionRequest))
+  });
+  const selectionResponse = await runSelectionAgent(selectionRequest, selectionRuntime);
   const selectionStage = await runAgentStage<SelectionStageOutput>({
     stage: "selection",
     artifact: input.artifact,
     inputRefs: { sourceItemIds: input.sourceItems.map((item) => item.id) },
     validationContext: { sourceItemIds: input.sourceItems.map((item) => item.id) },
-    execute: async () => selectionRaw
+    execute: async () => selectionResponse.text
   });
   const merged = mergeCandidateSignals(selectionStage.output.candidateSignals);
-  const rankingRaw = buildRankingOutput(merged, input.maxSignals ?? 5);
+  const rankingRequest = { maxSignals: input.maxSignals ?? 5, candidateSignals: merged };
+  const rankingRuntime = createStageModelRuntime({
+    config: modelRuntimeConfig,
+    env: modelRuntimeEnv,
+    fauxResponse: JSON.stringify(buildFauxRankingOutput(rankingRequest))
+  });
+  const rankingResponse = await runRankingAgent(rankingRequest, rankingRuntime);
   const rankingStage = await runAgentStage<RankingStageOutput>({
     stage: "ranking",
     artifact: input.artifact,
     inputRefs: { sourceItemIds: unique(merged.flatMap((signal) => signal.sourceItemIds)), signalIds: merged.map((signal) => signal.signalId) },
     validationContext: { signalIds: merged.map((signal) => signal.signalId) },
-    execute: async () => rankingRaw
+    execute: async () => rankingResponse.text
   });
 
   return {
     signals: buildSignalsFromRanking(input.sourceItems, merged, rankingStage.output),
     selection: selectionStage.output,
-    ranking: rankingStage.output
+    ranking: rankingStage.output,
+    events: [...selectionResponse.events, ...rankingResponse.events]
   };
+}
+
+function buildSelectionRequest(
+  sourceItems: SourceItem[],
+  annotations: UnderstandingStageOutput["sourceItemAnnotations"]
+): SelectionRequest {
+  return {
+    sourceItems: sourceItems.map((item) => ({
+      id: item.id,
+      sourceId: item.sourceId,
+      platform: item.platform,
+      url: item.url,
+      title: item.title,
+      analyzableText: item.analyzableText
+    })),
+    annotations
+  };
+}
+
+async function runSelectionAgent(
+  request: SelectionRequest,
+  runtime: StageModelRuntime
+): Promise<{ text: string; events: string[] }> {
+  const events: string[] = [];
+  const agent = new Agent({
+    initialState: {
+      systemPrompt: [
+        "你是 Daily Brief Agent 的 Signal Selection Stage。",
+        "你必须基于 Understanding annotations 和 Source Items 选择候选 Signal。",
+        "不要使用关键词兜底，不要按数组顺序照搬；候选必须能被 sourceItemIds 支撑。",
+        "输出必须是 JSON object。"
+      ].join("\n"),
+      model: runtime.model,
+      thinkingLevel: runtime.thinkingLevel
+    },
+    sessionId: "daily-brief-signal-selection",
+    ...(runtime.getApiKey ? { getApiKey: runtime.getApiKey } : {})
+  });
+
+  agent.subscribe((event) => {
+    events.push(`selection:${event.type}`);
+  });
+  await agent.prompt(
+    [
+      "请选择 Daily Brief 候选 Signals，并排除弱或不相关 Source Items。",
+      "",
+      "JSON schema:",
+      "{",
+      "  \"stage\": \"selection\",",
+      "  \"candidateSignals\": [",
+      "    {",
+      "      \"signalId\": \"stable unique signal id\",",
+      "      \"title\": \"reader-facing title\",",
+      "      \"signalType\": \"architecture|ai-coding|tool-repo|risk\",",
+      "      \"strength\": \"strong|weak\",",
+      "      \"sourceItemIds\": [\"cited source item ids\"],",
+      "      \"reason\": \"why this is a candidate, grounded in annotations\"",
+      "    }",
+      "  ],",
+      "  \"excludedSourceItems\": [{ \"sourceItemId\": \"id\", \"reason\": \"why excluded\" }]",
+      "}",
+      "",
+      "Selection lens: 领域包括 Agent 架构、AI Coding；方向包括先进工具、长程任务、持续学习、自我改进、人与 Agent 的边界。",
+      "Merge near-duplicate candidates yourself by using the same signalId and multiple sourceItemIds.",
+      "",
+      "Input:",
+      JSON.stringify(request, null, 2)
+    ].join("\n")
+  );
+
+  const text = latestAssistantText(agent);
+  if (!text) {
+    throw new Error("Selection Stage did not return text");
+  }
+
+  return { text, events };
+}
+
+async function runRankingAgent(
+  request: RankingRequest,
+  runtime: StageModelRuntime
+): Promise<{ text: string; events: string[] }> {
+  const events: string[] = [];
+  const agent = new Agent({
+    initialState: {
+      systemPrompt: [
+        "你是 Daily Brief Agent 的 Signal Ranking Stage。",
+        "你必须从候选 Signals 中决定最终排序和 low-signal 结果。",
+        "不要补充候选外 Signal；如果候选不足或都弱，返回空 rankedSignals。",
+        "输出必须是 JSON object。"
+      ].join("\n"),
+      model: runtime.model,
+      thinkingLevel: runtime.thinkingLevel
+    },
+    sessionId: "daily-brief-signal-ranking",
+    ...(runtime.getApiKey ? { getApiKey: runtime.getApiKey } : {})
+  });
+
+  agent.subscribe((event) => {
+    events.push(`ranking:${event.type}`);
+  });
+  await agent.prompt(
+    [
+      "请对候选 Signals 排序，最多选择 maxSignals 个 strong signals。",
+      "",
+      "JSON schema:",
+      "{",
+      "  \"stage\": \"ranking\",",
+      "  \"rankedSignals\": [{ \"signalId\": \"candidate signal id\", \"rank\": 1, \"reason\": \"grounded ranking reason\" }]",
+      "}",
+      "",
+      "Input:",
+      JSON.stringify(request, null, 2)
+    ].join("\n")
+  );
+
+  const text = latestAssistantText(agent);
+  if (!text) {
+    throw new Error("Ranking Stage did not return text");
+  }
+
+  return { text, events };
 }
 
 export function mergeCandidateSignals(
@@ -69,15 +234,12 @@ export function mergeCandidateSignals(
   return [...byId.values()];
 }
 
-function buildSelectionOutput(
-  sourceItems: SourceItem[],
-  annotations: UnderstandingStageOutput["sourceItemAnnotations"]
-): SelectionStageOutput {
-  const itemById = new Map(sourceItems.map((item) => [item.id, item]));
+function buildFauxSelectionOutput(request: SelectionRequest): SelectionStageOutput {
+  const itemById = new Map(request.sourceItems.map((item) => [item.id, item]));
   const candidateSignals: SelectionStageOutput["candidateSignals"] = [];
   const excludedSourceItems: NonNullable<SelectionStageOutput["excludedSourceItems"]> = [];
 
-  for (const annotation of annotations) {
+  for (const annotation of request.annotations) {
     const item = itemById.get(annotation.sourceItemId);
 
     if (!item) {
@@ -104,12 +266,12 @@ function buildSelectionOutput(
   return { stage: "selection", candidateSignals, excludedSourceItems };
 }
 
-function buildRankingOutput(candidates: SelectionStageOutput["candidateSignals"], maxSignals: number): RankingStageOutput {
-  const strong = candidates.filter((candidate) => candidate.strength === "strong");
+function buildFauxRankingOutput(request: RankingRequest): RankingStageOutput {
+  const strong = request.candidateSignals.filter((candidate) => candidate.strength === "strong");
 
   return {
     stage: "ranking",
-    rankedSignals: strong.slice(0, maxSignals).map((candidate, index) => ({
+    rankedSignals: strong.slice(0, request.maxSignals).map((candidate, index) => ({
       signalId: candidate.signalId,
       rank: index + 1,
       reason: candidate.reason
@@ -192,4 +354,14 @@ function inferSignalType(
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function latestAssistantText(agent: Agent): string | undefined {
+  const assistantMessage = [...agent.state.messages].reverse().find((message) => message.role === "assistant");
+  const text = assistantMessage?.content
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+
+  return text && text.trim().length > 0 ? text.trim() : undefined;
 }

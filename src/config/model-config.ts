@@ -137,13 +137,11 @@ function readProvider(value: unknown): ConfiguredModelProvider {
     return "openai-codex";
   }
 
-  if (
-    provider === "faux" ||
-    provider === "openai-codex" ||
-    provider === "openai" ||
-    provider === "deepseek" ||
-    provider === "openai-compatible"
-  ) {
+  if (provider === "faux") {
+    throw new Error("config.model.provider must not be faux; faux is only available through test-only runtime injection");
+  }
+
+  if (provider === "openai-codex" || provider === "openai" || provider === "deepseek" || provider === "openai-compatible") {
     return provider;
   }
 
