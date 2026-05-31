@@ -673,14 +673,21 @@ export async function isCliEntrypoint(argvPath: string | undefined, moduleUrl = 
 }
 
 isCliEntrypoint(process.argv[1])
-  .then((isEntrypoint) => {
+  .then(async (isEntrypoint) => {
     if (!isEntrypoint) {
-      return undefined;
+      return false;
     }
 
-    return loadDotenvFile().then(() => runCli(process.argv.slice(2)));
+    await loadDotenvFile();
+    await runCli(process.argv.slice(2));
+    return true;
   })
-    .catch((error: unknown) => {
-      consoleIo.stderr(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    });
+  .then((didRun) => {
+    if (didRun) {
+      process.exit(0);
+    }
+  })
+  .catch((error: unknown) => {
+    consoleIo.stderr(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });

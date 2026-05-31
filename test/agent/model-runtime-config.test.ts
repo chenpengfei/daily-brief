@@ -15,14 +15,20 @@ import { putCredential, writeModelConfig } from "../../src/config/index.js";
 import { appendSourceItems } from "../../src/storage/index.js";
 
 describe("model runtime configuration", () => {
-  it("requires an explicit model config by default instead of falling back to faux", () => {
-    expect(readModelRuntimeConfig({})).toEqual({
-      provider: "openai-codex",
-      model: "gpt-5.5",
-      credentialRef: "openai-codex.default",
-      ready: false,
-      issues: expect.arrayContaining([expect.stringContaining("Model config not found")])
-    });
+  it("requires an explicit model config by default instead of falling back to faux", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-missing-model-runtime-"));
+
+    try {
+      expect(readModelRuntimeConfig({ DAILY_BRIEF_HOME: directory })).toEqual({
+        provider: "openai-codex",
+        model: "gpt-5.5",
+        credentialRef: "openai-codex.default",
+        ready: false,
+        issues: expect.arrayContaining([expect.stringContaining("Model config not found")])
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("allows faux only through an explicit test-only env gate", () => {

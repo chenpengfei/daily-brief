@@ -150,79 +150,93 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
       signalIds: baseBrief.signals.map((signal) => signal.id)
     }
   });
-  const understanding = await runSourceItemUnderstandingStage({
-    sourceItems,
-    modelRuntimeConfig,
-    artifact,
-    ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
-  });
-  const selected = await runSignalSelectionAndRankingStages({
-    sourceItems,
-    annotations: understanding.annotations,
-    artifact,
-    modelRuntimeConfig,
-    ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
-  });
-  const selectedBrief: DailyBrief = {
-    ...baseBrief,
-    executiveSummary:
-      selected.signals.length === 0
-        ? "今天是 low-signal day：Selection/Ranking Stages 没有选出足够强的 Source-grounded Signals。"
-        : `今天有 ${selected.signals.length} 个 Agent-selected Source-grounded Signals，均保留 Source Item citation 以便回溯。`,
-    signals: selected.signals
-  };
-  const narrative = await enrichDailyBriefNarrativeWithAgent({
-    brief: selectedBrief,
-    sourceItems,
-    modelRuntimeConfig,
-    ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
-  });
-  const narrativeStage = await runAgentStage({
-    stage: "narrative",
-    artifact,
-    date,
-    inputRefs: {
-      sourceItemIds: sourceItems.map((item) => item.id),
-      signalIds: narrative.brief.signals.map((signal) => signal.id)
-    },
-    validationContext: {
-      signalIds: narrative.brief.signals.map((signal) => signal.id)
-    },
-    execute: async () => ({
-      stage: "narrative",
-      executiveSummary: narrative.brief.executiveSummary,
-      signalNarratives: narrative.brief.signals.map((signal) => ({
-        signalId: signal.id,
-        focusAreas: signal.focusAreas ?? [],
-        directions: signal.directions ?? [],
-        whatItIs: signal.summary.whatItIs,
-        whatItIsNot: signal.summary.whatItIsNot,
-        minimalExample: signal.summary.minimalExample,
-        whyItMatters: signal.whyItMatters
-      }))
-    })
-  });
-  const audited = await runSourceGroundingAuditStage({
-    brief: narrative.brief,
-    sourceItems,
-    artifact,
-    modelRuntimeConfig,
-    ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
-  });
-  const writtenArtifact = options.agentRunRoot ? await writeAgentRunArtifact(artifact, date, options.agentRunRoot) : undefined;
-  const markdown = renderDailyBriefMarkdown(audited.brief);
-  const piResult = await renderBriefThroughPiRuntime(markdown);
-  const archived = await writeBriefArchive(piResult.markdown, date, options.archiveRoot);
 
-  return {
-    archivePath: archived.path,
-    markdown: piResult.markdown,
-    brief: audited.brief,
-    sourceItemCount: sourceItems.length,
-    piEvents: [...understanding.events, ...selected.events, ...narrative.events, ...piResult.events],
-    modelRuntimeConfig,
-    ...((writtenArtifact?.path ?? narrativeStage.artifactPath) ? { agentRunArtifactPath: writtenArtifact?.path ?? narrativeStage.artifactPath } : {})
-  };
+  try {
+    const understanding = await runSourceItemUnderstandingStage({
+      sourceItems,
+      modelRuntimeConfig,
+      artifact,
+      ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
+    });
+    const selected = await runSignalSelectionAndRankingStages({
+      sourceItems,
+      annotations: understanding.annotations,
+      artifact,
+      modelRuntimeConfig,
+      ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
+    });
+    const selectedBrief: DailyBrief = {
+      ...baseBrief,
+      executiveSummary:
+        selected.signals.length === 0
+          ? "今天是 low-signal day：Selection/Ranking Stages 没有选出足够强的 Source-grounded Signals。"
+          : `今天有 ${selected.signals.length} 个 Agent-selected Source-grounded Signals，均保留 Source Item citation 以便回溯。`,
+      signals: selected.signals
+    };
+    const narrative = await enrichDailyBriefNarrativeWithAgent({
+      brief: selectedBrief,
+      sourceItems,
+      modelRuntimeConfig,
+      ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
+    });
+    const narrativeStage = await runAgentStage({
+      stage: "narrative",
+      artifact,
+      date,
+      inputRefs: {
+        sourceItemIds: sourceItems.map((item) => item.id),
+        signalIds: narrative.brief.signals.map((signal) => signal.id)
+      },
+      validationContext: {
+        signalIds: narrative.brief.signals.map((signal) => signal.id)
+      },
+      execute: async () => ({
+        stage: "narrative",
+        executiveSummary: narrative.brief.executiveSummary,
+        signalNarratives: narrative.brief.signals.map((signal) => ({
+          signalId: signal.id,
+          focusAreas: signal.focusAreas ?? [],
+          directions: signal.directions ?? [],
+          whatItIs: signal.summary.whatItIs,
+          whatItIsNot: signal.summary.whatItIsNot,
+          minimalExample: signal.summary.minimalExample,
+          whyItMatters: signal.whyItMatters
+        }))
+      })
+    });
+    const audited = await runSourceGroundingAuditStage({
+      brief: narrative.brief,
+      sourceItems,
+      artifact,
+      modelRuntimeConfig,
+      ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
+    });
+    const writtenArtifact = options.agentRunRoot ? await writeAgentRunArtifact(artifact, date, options.agentRunRoot) : undefined;
+    const markdown = renderDailyBriefMarkdown(audited.brief);
+    const piResult = await renderBriefThroughPiRuntime(markdown);
+    const archived = await writeBriefArchive(piResult.markdown, date, options.archiveRoot);
+
+    return {
+      archivePath: archived.path,
+      markdown: piResult.markdown,
+      brief: audited.brief,
+      sourceItemCount: sourceItems.length,
+      piEvents: [...understanding.events, ...selected.events, ...narrative.events, ...piResult.events],
+      modelRuntimeConfig,
+      ...((writtenArtifact?.path ?? narrativeStage.artifactPath) ? { agentRunArtifactPath: writtenArtifact?.path ?? narrativeStage.artifactPath } : {})
+    };
+  } catch (error) {
+    artifact.failure = {
+      kind: "execution",
+      message: error instanceof Error ? error.message : String(error)
+    };
+
+    if (options.agentRunRoot) {
+      await writeAgentRunArtifact(artifact, date, options.agentRunRoot);
+    }
+
+    throw error;
+  }
 }
 
 function classifyCollectionCoreFailure(

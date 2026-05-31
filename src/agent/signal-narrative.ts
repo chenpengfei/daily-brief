@@ -160,6 +160,10 @@ async function runNarrativeAgent(
       "- whatItIsNot 不是否定项目价值，而是防止误读。",
       "- minimalExample 要足够小，小到今天读者可以立刻想象怎么验证。",
       "- 如果 Source Item 信息不足，明确写“当前 Source Item 只表明...”。",
+      "- 不要写“从 X 扩展到 Y”“正在走向...”这类演进判断，除非 cited Source Items 同时支撑 X 和 Y。",
+      "- 不要把 IDE 补全、长期维护、代码审查、harness 运行时调度等常见 AI Coding 背景知识写进 narrative，除非 cited Source Items 明确提到。",
+      "- minimalExample 只能使用 cited Source Items 明确描述的能力；不要发明 harness 何时调用 skill 之类的执行机制。",
+      "- whyItMatters 可以说明它对设计者提出了什么检查点，但不能声称它已经支撑未被 cited Source Items 直接提到的 workflow。",
       "",
       "Input:",
       JSON.stringify(request, null, 2)

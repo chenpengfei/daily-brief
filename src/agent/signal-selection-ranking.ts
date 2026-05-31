@@ -150,6 +150,10 @@ async function runSelectionAgent(
       "",
       "Selection lens: 领域包括 Agent 架构、AI Coding；方向包括先进工具、长程任务、持续学习、自我改进、人与 Agent 的边界。",
       "Merge near-duplicate candidates yourself by using the same signalId and multiple sourceItemIds.",
+      "Title rules:",
+      "- title 只能概括 cited Source Items 直接共同说明的对象或能力。",
+      "- 不要在 title 中写“正在成为”“趋势”“继续升温”“生态演进”“走向”等 adoption/evolution 判断，除非输入 Source Items 直接证明这种变化。",
+      "- 如果只有若干 repository observations，title 应写成“X 类项目/能力出现于本次 Source Items”，而不是宣称整个生态变化。",
       "",
       "Input:",
       JSON.stringify(request, null, 2)
