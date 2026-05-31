@@ -3,6 +3,7 @@ import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-a
 import { readFile } from "node:fs/promises";
 import { generateDailyBrief, renderDailyBriefMarkdown, type DailyBrief } from "../brief/index.js";
 import { collectSources, type CollectionRunResult } from "../collection/index.js";
+import type { SourceItem } from "../domain/index.js";
 import { deliverCoreFailureNotification, deliverDiscordNotification, type DiscordDeliveryResult } from "../discord/index.js";
 import {
   briefArchivePath,
@@ -15,7 +16,7 @@ import type { CoreWorkflowFailure } from "../workflow/index.js";
 import { readModelRuntimeConfig, type ModelRuntimeConfig, type ModelRuntimeEnv } from "./model-runtime-config.js";
 import { enrichDailyBriefNarrativeWithAgent } from "./signal-narrative.js";
 import { runSignalSelectionAndRankingStages } from "./signal-selection-ranking.js";
-import { runSourceGroundingAuditStage } from "./source-grounding-audit.js";
+import { AnalysisFailureError, runSourceGroundingAuditStage } from "./source-grounding-audit.js";
 import { runSourceItemUnderstandingStage } from "./source-item-understanding.js";
 import { runAgentStage } from "./stage-runner.js";
 
@@ -204,46 +205,33 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
           : `今天有 ${selected.signals.length} 个 Agent-selected Source-grounded Signals，均保留 Source Item citation 以便回溯。`,
       signals: selected.signals
     };
+    const narrativeEvents: string[] = [];
     const narrative = await enrichDailyBriefNarrativeWithAgent({
       brief: selectedBrief,
       sourceItems,
       modelRuntimeConfig,
       ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
     });
-    const narrativeStage = await runAgentStage({
-      stage: "narrative",
+    narrativeEvents.push(...narrative.events);
+    const narrativeStage = await recordNarrativeStage({
       artifact,
       date,
-      inputRefs: {
-        ...(options.collectionFailures ? { collectionFailures: options.collectionFailures } : {}),
-        sourceItemIds: sourceItems.map((item) => item.id),
-        signalIds: narrative.brief.signals.map((signal) => signal.id)
-      },
-      validationContext: {
-        signalIds: narrative.brief.signals.map((signal) => signal.id)
-      },
-      execute: async () => ({
-        stage: "narrative",
-        executiveSummary: narrative.brief.executiveSummary,
-        signalNarratives: narrative.brief.signals.map((signal) => ({
-          signalId: signal.id,
-          focusAreas: signal.focusAreas ?? [],
-          directions: signal.directions ?? [],
-          whatItIs: signal.summary.whatItIs,
-          whatItIsNot: signal.summary.whatItIsNot,
-          minimalExample: signal.summary.minimalExample,
-          whyItMatters: signal.whyItMatters
-        }))
-      })
-    });
-    const audited = await runSourceGroundingAuditStage({
+      sourceItems,
       brief: narrative.brief,
+      attempt: 1,
+      ...(options.collectionFailures ? { collectionFailures: options.collectionFailures } : {})
+    });
+    const audited = await auditBriefWithSingleRepairAttempt({
+      narrativeBrief: narrative.brief,
       sourceItems,
       artifact,
+      date,
       modelRuntimeConfig,
-      ...(collectionInputRefs ? { inputRefs: collectionInputRefs } : {}),
-      ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
+      ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {}),
+      ...(options.collectionFailures ? { collectionFailures: options.collectionFailures } : {}),
+      ...(collectionInputRefs ? { collectionInputRefs } : {})
     });
+    narrativeEvents.push(...audited.narrativeEvents);
     const writtenArtifact = options.agentRunRoot ? await writeAgentRunArtifact(artifact, date, options.agentRunRoot, dateKey) : undefined;
     const markdown = renderDailyBriefMarkdown(audited.brief);
     const piResult = await renderBriefThroughPiRuntime(markdown);
@@ -254,7 +242,7 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
       markdown: piResult.markdown,
       brief: audited.brief,
       sourceItemCount: sourceItems.length,
-      piEvents: [...understanding.events, ...selected.events, ...narrative.events, ...piResult.events],
+      piEvents: [...understanding.events, ...selected.events, ...narrativeEvents, ...piResult.events],
       modelRuntimeConfig,
       ...((writtenArtifact?.path ?? narrativeStage.artifactPath) ? { agentRunArtifactPath: writtenArtifact?.path ?? narrativeStage.artifactPath } : {})
     };
@@ -269,6 +257,105 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
     }
 
     throw error;
+  }
+}
+
+async function recordNarrativeStage(input: {
+  artifact: ReturnType<typeof createAgentRunArtifact>;
+  date: Date;
+  sourceItems: SourceItem[];
+  brief: DailyBrief;
+  collectionFailures?: Array<{ sourceId: string; reason: string }>;
+  attempt: number;
+  repairFindings?: AnalysisFailureError["findings"];
+}): Promise<{ artifactPath?: string }> {
+  const result = await runAgentStage({
+    stage: "narrative",
+    artifact: input.artifact,
+    date: input.date,
+    inputRefs: {
+      ...(input.collectionFailures ? { collectionFailures: input.collectionFailures } : {}),
+      sourceItemIds: input.sourceItems.map((item) => item.id),
+      signalIds: input.brief.signals.map((signal) => signal.id),
+      attempt: input.attempt,
+      ...(input.repairFindings ? { repair: { stage: "audit", findings: input.repairFindings } } : {})
+    },
+    validationContext: {
+      signalIds: input.brief.signals.map((signal) => signal.id)
+    },
+    execute: async () => ({
+      stage: "narrative",
+      executiveSummary: input.brief.executiveSummary,
+      signalNarratives: input.brief.signals.map((signal) => ({
+        signalId: signal.id,
+        focusAreas: signal.focusAreas ?? [],
+        directions: signal.directions ?? [],
+        whatItIs: signal.summary.whatItIs,
+        whatItIsNot: signal.summary.whatItIsNot,
+        minimalExample: signal.summary.minimalExample,
+        whyItMatters: signal.whyItMatters
+      }))
+    })
+  });
+
+  return result;
+}
+
+async function auditBriefWithSingleRepairAttempt(input: {
+  narrativeBrief: DailyBrief;
+  sourceItems: SourceItem[];
+  artifact: ReturnType<typeof createAgentRunArtifact>;
+  date: Date;
+  modelRuntimeConfig: ModelRuntimeConfig;
+  modelRuntimeEnv?: ModelRuntimeEnv;
+  collectionFailures?: Array<{ sourceId: string; reason: string }>;
+  collectionInputRefs?: { collectionFailures: Array<{ sourceId: string; reason: string }> };
+}): Promise<{ brief: DailyBrief; narrativeEvents: string[] }> {
+  const narrativeEvents: string[] = [];
+
+  try {
+    const audited = await runSourceGroundingAuditStage({
+      brief: input.narrativeBrief,
+      sourceItems: input.sourceItems,
+      artifact: input.artifact,
+      modelRuntimeConfig: input.modelRuntimeConfig,
+      ...(input.collectionInputRefs ? { inputRefs: input.collectionInputRefs } : {}),
+      ...(input.modelRuntimeEnv ? { modelRuntimeEnv: input.modelRuntimeEnv } : {})
+    });
+
+    return { brief: audited.brief, narrativeEvents };
+  } catch (error) {
+    if (!(error instanceof AnalysisFailureError)) {
+      throw error;
+    }
+
+    const repaired = await enrichDailyBriefNarrativeWithAgent({
+      brief: input.narrativeBrief,
+      sourceItems: input.sourceItems,
+      modelRuntimeConfig: input.modelRuntimeConfig,
+      repairContext: { auditFindings: error.findings },
+      ...(input.modelRuntimeEnv ? { modelRuntimeEnv: input.modelRuntimeEnv } : {})
+    });
+    narrativeEvents.push(...repaired.events);
+    await recordNarrativeStage({
+      artifact: input.artifact,
+      date: input.date,
+      sourceItems: input.sourceItems,
+      brief: repaired.brief,
+      attempt: 2,
+      repairFindings: error.findings,
+      ...(input.collectionFailures ? { collectionFailures: input.collectionFailures } : {})
+    });
+    const audited = await runSourceGroundingAuditStage({
+      brief: repaired.brief,
+      sourceItems: input.sourceItems,
+      artifact: input.artifact,
+      modelRuntimeConfig: input.modelRuntimeConfig,
+      ...(input.collectionInputRefs ? { inputRefs: input.collectionInputRefs } : {}),
+      ...(input.modelRuntimeEnv ? { modelRuntimeEnv: input.modelRuntimeEnv } : {})
+    });
+
+    return { brief: audited.brief, narrativeEvents };
   }
 }
 

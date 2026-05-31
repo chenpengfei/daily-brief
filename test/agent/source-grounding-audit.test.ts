@@ -62,6 +62,17 @@ describe("Source-grounding Audit Stage", () => {
       })
     ).rejects.toThrow(AnalysisFailureError);
   });
+
+  it("rejects per-source mapping language across multiple citations", async () => {
+    await expect(
+      runSourceGroundingAuditStage({
+        brief: brief({ perSourceMapping: true }),
+        sourceItems: [sourceItem(), sourceItem({ id: "item-2", title: "Agent skills" })],
+        artifact: createArtifact(),
+        allowRepair: false
+      })
+    ).rejects.toThrow(AnalysisFailureError);
+  });
 });
 
 function createArtifact() {
@@ -73,7 +84,14 @@ function createArtifact() {
 }
 
 function brief(
-  overrides: { citationSourceItemId?: string; missingLens?: boolean; overconfident?: boolean; executiveSummary?: string; partialFailures?: string[] } = {}
+  overrides: {
+    citationSourceItemId?: string;
+    missingLens?: boolean;
+    overconfident?: boolean;
+    executiveSummary?: string;
+    partialFailures?: string[];
+    perSourceMapping?: boolean;
+  } = {}
 ): DailyBrief {
   return {
     date: new Date("2026-05-28T07:00:00.000Z"),
@@ -86,26 +104,33 @@ function brief(
         title: "Agent runtime",
         ...(overrides.missingLens ? {} : { focusAreas: ["Agent 架构"], directions: ["先进工具"] }),
         summary: {
-          whatItIs: overrides.overconfident ? "This is guaranteed best in class." : "当前 Source Item 表明 Agent runtime pattern。",
+          whatItIs: overrides.overconfident
+            ? "This is guaranteed best in class."
+            : overrides.perSourceMapping
+              ? "item-1 与 item-2 分别指向 runtime 与 skills。"
+              : "当前 Source Item 表明 Agent runtime pattern。",
           whatItIsNot: "不是成熟度背书。",
           minimalExample: "读 cited Source Item。"
         },
         whyItMatters: "它影响 Agent Architecture。",
         citations: [
-          { sourceItemId: overrides.citationSourceItemId ?? "item-1", sourceId: "source", title: "Agent runtime", url: "https://example.com" }
+          { sourceItemId: overrides.citationSourceItemId ?? "item-1", sourceId: "source", title: "Agent runtime", url: "https://example.com" },
+          ...(overrides.perSourceMapping
+            ? [{ sourceItemId: "item-2", sourceId: "source", title: "Agent skills", url: "https://example.com/2" }]
+            : [])
         ]
       }
     ]
   };
 }
 
-function sourceItem(): SourceItem {
+function sourceItem(overrides: Partial<SourceItem> = {}): SourceItem {
   return {
-    id: "item-1",
+    id: overrides.id ?? "item-1",
     sourceId: "source",
     platform: "blog",
     url: "https://example.com",
-    title: "Agent runtime",
+    title: overrides.title ?? "Agent runtime",
     fetchedAt: "2026-05-28T07:00:00.000Z",
     analyzableText: "Agent Architecture notes.",
     contentHash: "hash"

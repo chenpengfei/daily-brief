@@ -24,6 +24,15 @@ export interface AgentRunArtifact {
 export interface AgentRunInputRefs {
   sourceItemIds?: string[];
   signalIds?: string[];
+  attempt?: number;
+  repair?: {
+    stage: string;
+    findings: Array<{
+      signalId?: string;
+      sourceItemId?: string;
+      issue: string;
+    }>;
+  };
   collectionFailures?: Array<{
     sourceId: string;
     reason: string;

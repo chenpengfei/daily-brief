@@ -172,6 +172,12 @@ function buildFauxAuditOutput(brief: DailyBrief, sourceItems: SourceItem[]): Aud
     if (/market leader|guaranteed|best in class|widely adopted/i.test(narrative)) {
       findings.push({ signalId: signal.id, issue: "Narrative contains unsupported overconfident claim." });
     }
+    if (
+      signal.citations.length > 1 &&
+      /分别(?:指向|对应|代表|说明|表明|描述)|一一对应|respectively/i.test(narrative)
+    ) {
+      findings.push({ signalId: signal.id, issue: "Narrative contains risky per-source mapping across multiple citations." });
+    }
   }
 
   return {

@@ -3,6 +3,7 @@ import type { DailyBrief, Signal, SignalSummary } from "../brief/index.js";
 import type { SourceItem } from "../domain/index.js";
 import { createStageModelRuntime, type StageModelRuntime } from "./model-stage-runtime.js";
 import type { ModelRuntimeConfig, ModelRuntimeEnv } from "./model-runtime-config.js";
+import type { AuditStageOutput } from "./stage-contracts.js";
 
 interface SignalNarrative {
   signalId: string;
@@ -19,7 +20,7 @@ interface NarrativeResponse {
   signalNarratives: SignalNarrative[];
 }
 
-interface NarrativeRequest {
+export interface NarrativeRequest {
   signals: Array<{
     id: string;
     type: Signal["type"];
@@ -47,30 +48,66 @@ export interface SignalNarrativeEnrichmentResult {
   events: string[];
 }
 
+export class NarrativeGroundingError extends Error {
+  readonly findings: string[];
+
+  constructor(findings: string[]) {
+    super(`Signal narrative grounding failed:\n${findings.map((finding) => `- ${finding}`).join("\n")}`);
+    this.name = "NarrativeGroundingError";
+    this.findings = findings;
+  }
+}
+
 export async function enrichDailyBriefNarrativeWithAgent(input: {
   brief: DailyBrief;
   sourceItems: SourceItem[];
   modelRuntimeConfig: ModelRuntimeConfig;
   modelRuntimeEnv?: ModelRuntimeEnv;
+  repairContext?: NarrativeRepairContext;
 }): Promise<SignalNarrativeEnrichmentResult> {
   const request = buildNarrativeRequest(input.brief, input.sourceItems);
-  const runtime = createStageModelRuntime({
-    config: input.modelRuntimeConfig,
-    env: input.modelRuntimeEnv ?? process.env,
-    fauxResponse: JSON.stringify(buildFauxNarrativeResponse(request))
-  });
+  const events: string[] = [];
+  let groundingFindings = input.repairContext?.groundingFindings ?? [];
 
-  try {
-    const response = await runNarrativeAgent(request, runtime);
-    const narrative = parseNarrativeResponse(response.text);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const runtime = createStageModelRuntime({
+      config: input.modelRuntimeConfig,
+      env: input.modelRuntimeEnv ?? process.env,
+      fauxResponse: JSON.stringify(buildFauxNarrativeResponse(request))
+    });
 
-    return {
-      brief: applyNarratives(input.brief, narrative),
-      events: response.events
-    };
-  } finally {
-    runtime.unregister?.();
+    try {
+      const response = await runNarrativeAgent(request, runtime, {
+        attempt,
+        ...(input.repairContext?.auditFindings ? { auditFindings: input.repairContext.auditFindings } : {}),
+        ...(groundingFindings.length > 0 ? { groundingFindings } : {})
+      });
+      events.push(...response.events);
+      const narrative = parseNarrativeResponse(response.text);
+      assertNarrativeGrounding(request, narrative);
+
+      return {
+        brief: applyNarratives(input.brief, narrative),
+        events
+      };
+    } catch (error) {
+      if (error instanceof NarrativeGroundingError && attempt < 2) {
+        groundingFindings = error.findings;
+        continue;
+      }
+
+      throw error;
+    } finally {
+      runtime.unregister?.();
+    }
   }
+
+  throw new Error("Signal narrative Agent exhausted retry attempts");
+}
+
+export interface NarrativeRepairContext {
+  auditFindings?: AuditStageOutput["findings"];
+  groundingFindings?: string[];
 }
 
 function buildNarrativeRequest(brief: DailyBrief, sourceItems: SourceItem[]): NarrativeRequest {
@@ -112,7 +149,8 @@ function buildNarrativeRequest(brief: DailyBrief, sourceItems: SourceItem[]): Na
 
 async function runNarrativeAgent(
   request: NarrativeRequest,
-  runtime: StageModelRuntime
+  runtime: StageModelRuntime,
+  feedback: { attempt: number; auditFindings?: AuditStageOutput["findings"]; groundingFindings?: string[] }
 ): Promise<{ text: string; events: string[] }> {
   const events: string[] = [];
   const agent = new Agent({
@@ -164,6 +202,19 @@ async function runNarrativeAgent(
       "- 不要把 IDE 补全、长期维护、代码审查、harness 运行时调度等常见 AI Coding 背景知识写进 narrative，除非 cited Source Items 明确提到。",
       "- minimalExample 只能使用 cited Source Items 明确描述的能力；不要发明 harness 何时调用 skill 之类的执行机制。",
       "- whyItMatters 可以说明它对设计者提出了什么检查点，但不能声称它已经支撑未被 cited Source Items 直接提到的 workflow。",
+      "- citedSourceItems 不是有序映射列表。多个 citation 只能写“共同表明/共同构成/共同指向”这类集合性判断。",
+      "- 禁止写“分别指向”“分别对应”“一一对应”“respectively”这类把多个 Source Items 映射到多个结论的句子，除非每个映射都能在对应 Source Item 原文中逐字找到支撑。",
+      "- 如果需要说明某个 Source Item 支撑某个能力，必须点名该 Source Item 的 id 或 title，并且只使用它 analyzableText 或 metadata 明确给出的词。",
+      ...(feedback.attempt > 1 || feedback.auditFindings?.length || feedback.groundingFindings?.length
+        ? [
+            "",
+            "这是一次 bounded repair retry。必须修复上一轮发现的问题，不要扩大叙述范围。",
+            "上一轮 Audit findings:",
+            JSON.stringify(feedback.auditFindings ?? [], null, 2),
+            "上一轮 Narrative grounding findings:",
+            JSON.stringify(feedback.groundingFindings ?? [], null, 2)
+          ]
+        : []),
       "",
       "Input:",
       JSON.stringify(request, null, 2)
@@ -201,6 +252,36 @@ function parseNarrativeResponse(text: string): NarrativeResponse {
     executiveSummary: readRequiredString(parsed, "executiveSummary"),
     signalNarratives: readSignalNarrativeArray(parsed.signalNarratives)
   };
+}
+
+export function assertNarrativeGrounding(request: NarrativeRequest, narrativeResponse: NarrativeResponse): void {
+  const requestBySignal = new Map(request.signals.map((signal) => [signal.id, signal]));
+  const findings: string[] = [];
+
+  for (const narrative of narrativeResponse.signalNarratives) {
+    const signal = requestBySignal.get(narrative.signalId);
+
+    if (!signal || signal.citedSourceItems.length < 2) {
+      continue;
+    }
+
+    const text = [
+      narrative.whatItIs,
+      narrative.whatItIsNot,
+      narrative.minimalExample,
+      narrative.whyItMatters
+    ].join(" ");
+
+    if (/分别(?:指向|对应|代表|说明|表明|描述)|一一对应|respectively/i.test(text)) {
+      findings.push(
+        `${narrative.signalId} uses ordered per-source mapping language across multiple cited Source Items; use source-specific support or a collective claim instead.`
+      );
+    }
+  }
+
+  if (findings.length > 0) {
+    throw new NarrativeGroundingError(findings);
+  }
 }
 
 function extractJsonObject(text: string): string {
