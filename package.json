@@ -1,13 +1,37 @@
 {
-  "name": "daily-brief",
+  "name": "@chenpengfei/daily-brief",
   "version": "0.1.0",
+  "description": "Agent-driven daily brief CLI for manually curated Agent architecture and AI Coding sources.",
   "private": false,
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/chenpengfei/daily-brief#readme",
+  "bugs": {
+    "url": "https://github.com/chenpengfei/daily-brief/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chenpengfei/daily-brief.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "agent",
+    "daily-brief",
+    "cli",
+    "ai-coding",
+    "briefing"
+  ],
   "files": [
     "dist/src",
     "config/sources.example.yaml",
     "templates",
     "docs/operations.md",
+    "docs/user-manual.md",
+    "docs/release-workflow.md",
+    "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "bin": {
@@ -17,6 +41,8 @@
     "build": "tsc -p tsconfig.json",
     "cli": "tsx src/cli.ts",
     "prepack": "npm run build",
+    "release:check": "npm test && npm run typecheck && npm run build && npm pack --dry-run",
+    "release:publish:dry-run": "npm publish --dry-run --access public",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

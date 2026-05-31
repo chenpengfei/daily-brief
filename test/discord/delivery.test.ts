@@ -63,6 +63,26 @@ describe("Discord Delivery", () => {
     });
   });
 
+  it("renders the packaged default template independent of the current working directory", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-discord-cwd-"));
+    const originalCwd = process.cwd();
+
+    try {
+      process.chdir(directory);
+
+      const notification = await renderDiscordNotification({
+        brief: briefFixture(),
+        briefPath: "briefs/2026/05/2026-05-28.md"
+      });
+
+      expect(notification).toContain("Daily Brief -- 2026-05-28");
+      expect(notification).toContain("完整简报");
+    } finally {
+      process.chdir(originalCwd);
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("does not throw when Discord sending fails", async () => {
     await expect(
       deliverDiscordNotification(

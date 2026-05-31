@@ -200,6 +200,78 @@ _Avoid_: Chat product, long-running gateway, Discord control surface
 The interactive Operational CLI flow, exposed as `daily-brief setup`, that prepares an installed Daily Brief Agent for first use by creating user files and guiding required configuration choices. The Setup Wizard may configure Sources, LLM Provider access, and Delivery Channels, while scheduled workflow commands remain non-interactive.
 _Avoid_: Scheduled run, hidden auto-init, source discovery
 
+**User Manual**:
+The reader-facing product documentation for installing, setting up, running, upgrading, and troubleshooting the Daily Brief Agent. The User Manual lives separately from operations documentation, which may contain maintainer-oriented cadence, scheduler, and runtime details.
+_Avoid_: Operations notes, PRD, release notes
+
+**Changelog**:
+The repository-maintained version history for Formal Releases, with each Release Version summarizing user-visible changes, installation or upgrade notes, and known limitations. GitHub Release notes should be derived from the Changelog entry rather than becoming the only durable release history.
+_Avoid_: Commit log, PR list, GitHub-only release notes
+
+**Release Checklist Issue**:
+A GitHub Issue used to coordinate one Formal Release, collect Release Gate evidence, and record Human Release Gate approval. A Release Checklist Issue is an operational release artifact, not a PRD or a Goal Issue.
+_Avoid_: Product requirement, implementation ticket, chat-only checklist
+
+**Release Workflow Documentation**:
+The maintainer-facing documentation that defines the three Release Gates, required evidence, Release Checklist Issue template, review expectations, and publication commands for Formal Releases. Release Workflow Documentation lives in the repository docs before any GitHub issue template automation is introduced.
+_Avoid_: User Manual, operations notes, hidden chat procedure
+
+**Release Pull Request**:
+The pull request that prepares one Formal Release by updating the Release Version, package metadata, Changelog, User Manual, release workflow documentation, and readiness evidence before merging to `main`. A Release Pull Request normally should not include product code fixes; a narrow Release-Blocking Fix exception is allowed only when it is required to prove installability or publishability for the same release and is explicitly recorded for Agent Release Review. Publication happens only after the Human Release Gate.
+_Avoid_: Feature PR, ordinary bug-fix PR, tag-only release, publish PR
+
+**Formal Release**:
+A maintainer-approved release of the Daily Brief Agent that publishes both a GitHub Release and an npm registry version so users can install the Operational CLI through normal npm tooling. A Formal Release is distinct from a development checkpoint or an unpublished release candidate.
+_Avoid_: GitHub-only artifact, development checkpoint, unversioned handoff
+
+**Release Package**:
+The npm package distributed during a Formal Release, named `@chenpengfei/daily-brief`, while its installed command remains `daily-brief`. The Release Package is the normal user installation path for the Operational CLI.
+_Avoid_: Unscoped package name, GitHub-only install, CLI command name as package identity
+
+**Release Version**:
+The SemVer identifier for a Formal Release. The npm package version uses `X.Y.Z`, while the corresponding GitHub tag and release title use `vX.Y.Z`.
+_Avoid_: Date version, mismatched tag, untagged package version
+
+**Release Gate**:
+A human-triggered checkpoint in the Formal Release workflow. Each Release Gate has an explicit actor, expected evidence, and allowed outcome so release preparation, review, and final approval do not collapse into one implicit step.
+_Avoid_: Background automation, implicit approval, chat-only decision
+
+**Agent Release Preparation Gate**:
+The first Release Gate, where a human asks an Agent to prepare the Release Pull Request, update release-facing content, run required checks, and collect evidence in the Release Checklist Issue. This gate produces release content and evidence, but it does not approve or publish the release.
+_Avoid_: Human-only checklist, publish step, review approval
+
+**Release Check Command**:
+The project command that runs the repeatable automated checks required for release preparation: tests, typechecking, build, and package dry-run verification. The Release Check Command produces readiness evidence but must not tag, publish, create a GitHub Release, or perform the isolated Release Install Smoke Test.
+_Avoid_: Publish script, deployment command, manual checklist only
+
+**Release CI Workflow**:
+The GitHub Actions workflow that runs dependency installation and the Release Check Command for pull requests and release preparation, giving the Agent Release Review Gate independent evidence beyond local command output. The Release CI Workflow is a verification channel, not an automated publishing channel.
+_Avoid_: Auto-publish workflow, local-only evidence, hidden release gate
+
+**Release Install Smoke Test**:
+The isolated installation check that installs the Release Package into a temporary npm prefix and runs the Operational CLI with temporary User Configuration and User Data directories. The Release Install Smoke Test proves the packaged CLI can be installed and initialized without touching the maintainer's real global npm environment or Daily Brief data.
+_Avoid_: Local tsx run, real global install, real user home mutation
+
+**Release Blocker**:
+A failed release check, missing evidence, product behavior defect, or documentation mismatch that prevents a release candidate from advancing to the next Release Gate. Product-code Release Blockers normally leave the Release Pull Request and are resolved through a separate issue or fix PR before release preparation restarts, unless they qualify as a narrow Release-Blocking Fix.
+_Avoid_: Known limitation, release note, unrelated quick fix inside release PR
+
+**Release-Blocking Fix**:
+A minimal product-code fix kept inside a Release Pull Request because the release cannot prove installability or publishability without it. A Release-Blocking Fix must be recorded in the Release Checklist Issue and Release Pull Request with its scope reason, affected files, targeted tests, smoke evidence, and Agent Release Review focus.
+_Avoid_: Ordinary product enhancement, opportunistic bug fix, hidden behavior change
+
+**Agent Release Review Gate**:
+The second Release Gate, where a human asks an Agent in an independent review context to review the Release Pull Request, release-facing content, and collected evidence against the release policy. This gate can recommend approval or request fixes, but it does not publish the release or let the preparing Agent approve its own work.
+_Avoid_: Self-approval, same-thread review, code review only, publish step
+
+**Human Release Gate**:
+The third Release Gate, where the maintainer decides whether a reviewed release candidate becomes a Formal Release. After approval, the maintainer tags the reviewed `main` state, publishes the npm registry version, creates the GitHub Release, and verifies public installation.
+_Avoid_: Autonomous publish, background release, CI-only approval
+
+**Post-Release Incident**:
+A release problem discovered after a tag, npm version, or GitHub Release has become public. Post-Release Incidents should preserve published history, document the issue in the Release Checklist Issue and release notes when relevant, and prefer a follow-up patch Release Version over moving tags or unpublishing packages.
+_Avoid_: Silent rollback, moved tag, hidden failed release
+
 **Domain Module**:
 The TypeScript module that expresses the shared project language as types and pure domain rules. The Domain Module mirrors MVP concepts from this glossary, such as Source, Source Item, Signal, and Daily Brief, but it does not perform I/O, fetching, delivery, CLI rendering, or agent orchestration.
 _Avoid_: Storage layer, adapter implementation, prompt code
