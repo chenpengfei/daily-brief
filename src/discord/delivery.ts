@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import type { DailyBrief } from "../brief/index.js";
 import { getCredential, readDeliveryConfig, resolveDailyBriefPaths } from "../config/index.js";
 import { createCoreWorkflowFailureNotification, type CoreWorkflowFailure } from "../workflow/index.js";
@@ -21,7 +22,7 @@ export type DiscordDeliveryResult =
   | { status: "failed"; reason: string };
 
 export async function renderDiscordNotification(input: DiscordNotificationInput): Promise<string> {
-  const template = await readFile(input.templatePath ?? "templates/discord-notification.md", "utf8");
+  const template = await readDiscordTemplate(input.templatePath);
   const date = input.brief.date.toISOString().slice(0, 10);
   const summaryBullets = buildSummaryBullets(input.brief);
 
@@ -75,6 +76,28 @@ async function sendDiscordContent(
   } catch (error) {
     return { status: "failed", reason: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function readDiscordTemplate(templatePath?: string): Promise<string> {
+  if (templatePath) {
+    return readFile(templatePath, "utf8");
+  }
+
+  const candidates = [
+    fileURLToPath(new URL("../../templates/discord-notification.md", import.meta.url)),
+    fileURLToPath(new URL("../../../templates/discord-notification.md", import.meta.url))
+  ];
+  let lastError: unknown;
+
+  for (const candidate of candidates) {
+    try {
+      return await readFile(candidate, "utf8");
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Discord notification template not found");
 }
 
 export function resolveConfiguredWebhookUrl(env: Partial<Record<string, string | undefined>> = process.env): string | undefined {

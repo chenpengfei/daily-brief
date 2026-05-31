@@ -1,5 +1,7 @@
 # Daily Brief Operations
 
+For end-user installation, setup, upgrade, and troubleshooting, see `docs/user-manual.md`. For maintainer release gates and publication steps, see `docs/release-workflow.md`.
+
 Installed usage uses the `daily-brief` binary:
 
 ```bash
@@ -49,7 +51,7 @@ Installed operational paths can be adjusted through environment variables:
 
 - `DAILY_BRIEF_HOME`: user config directory. Defaults to `~/.daily-brief`.
 - `DAILY_BRIEF_DATA_HOME`: generated data directory. Defaults to `~/.daily-brief/data`.
-- `DAILY_BRIEF_DISCORD_TEMPLATE_PATH`: Discord notification template path. Defaults to `templates/discord-notification.md`.
+- `DAILY_BRIEF_DISCORD_TEMPLATE_PATH`: optional Discord notification template override. Defaults to the packaged Discord notification template.
 - `DISCORD_WEBHOOK_URL`: Discord webhook URL. If unset, Discord Delivery is skipped with an explicit reason.
 
 Model/provider and delivery configuration should normally be managed with:
