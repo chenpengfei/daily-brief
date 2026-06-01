@@ -2,6 +2,24 @@
 
 All notable changes for Formal Releases are recorded here. GitHub Release notes should be derived from the matching version entry.
 
+## 0.1.1 - 2026-06-01
+
+Patch release for first-install command discovery.
+
+### User-visible Changes
+
+- Updates installation documentation to use `$(npm prefix -g)/bin/daily-brief` for first setup, so users can run the installed CLI even when npm's global bin directory is not yet in their shell `PATH`.
+- Clarifies that the shorter `daily-brief` command works after npm's global bin directory is added to `PATH`.
+
+### Installation and Upgrade Notes
+
+- Upgrade with `npm install -g @chenpengfei/daily-brief@latest`.
+- If `daily-brief` is not found after installation, run `$(npm prefix -g)/bin/daily-brief setup`.
+
+### Known Limitations
+
+- npm may hide successful lifecycle script output during install, so this release uses visible documentation and release notes rather than a `postinstall` reminder.
+
 ## 0.1.0 - 2026-05-31
 
 Initial Formal Release candidate for the Daily Brief Agent.
