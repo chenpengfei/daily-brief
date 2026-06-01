@@ -8,7 +8,15 @@ Daily Brief is distributed as the npm package `@chenpengfei/daily-brief` and ins
 
 ```bash
 npm install -g @chenpengfei/daily-brief
-daily-brief --help
+"$(npm prefix -g)/bin/daily-brief" --help
+```
+
+The explicit `$(npm prefix -g)/bin/daily-brief` path works even when npm's global bin directory is not in your shell `PATH`.
+
+To use the shorter `daily-brief` command, add npm's global bin directory to your shell `PATH`:
+
+```bash
+export PATH="$(npm prefix -g)/bin:$PATH"
 ```
 
 Daily Brief requires Node.js 22 or newer.
@@ -18,8 +26,10 @@ Daily Brief requires Node.js 22 or newer.
 Run setup after installing the package:
 
 ```bash
-daily-brief setup
+"$(npm prefix -g)/bin/daily-brief" setup
 ```
+
+If npm's global bin directory is in `PATH`, `daily-brief setup` is equivalent.
 
 Setup creates user configuration and generated-data directories, initializes the Source Registry from the packaged example, prepares credential storage, and reports readiness. Setup does not collect Sources, call an LLM, generate a Daily Brief, or send a delivery notification.
 
@@ -110,7 +120,7 @@ Upgrade the installed package through npm:
 
 ```bash
 npm install -g @chenpengfei/daily-brief@latest
-daily-brief status
+"$(npm prefix -g)/bin/daily-brief" status
 ```
 
 Run `daily-brief setup` again when release notes or status output indicate that configuration needs to be refreshed. Setup preserves existing files unless an overwrite or force behavior is explicitly selected.
@@ -120,7 +130,13 @@ Run `daily-brief setup` again when release notes or status output indicate that 
 If setup has not run, run:
 
 ```bash
-daily-brief setup
+"$(npm prefix -g)/bin/daily-brief" setup
+```
+
+If `daily-brief` is not found after a successful global install, run:
+
+```bash
+"$(npm prefix -g)/bin/daily-brief" setup
 ```
 
 If Sources are not collected, run:

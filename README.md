@@ -8,6 +8,12 @@ Daily Brief is distributed as the npm package `@chenpengfei/daily-brief` and ins
 
 ```bash
 npm install -g @chenpengfei/daily-brief
+"$(npm prefix -g)/bin/daily-brief" setup
+```
+
+After npm's global bin directory is in your shell `PATH`, you can use the shorter command:
+
+```bash
 daily-brief setup
 ```
 
