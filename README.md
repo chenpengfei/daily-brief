@@ -8,13 +8,13 @@ Daily Brief is distributed as the npm package `@chenpengfei/daily-brief` and ins
 
 ```bash
 npm install -g @chenpengfei/daily-brief
-daily-brief setup
+"$(npm prefix -g)/bin/daily-brief" setup
 ```
 
-If your shell cannot find `daily-brief` after installation, run it through npm's global bin path once:
+After npm's global bin directory is in your shell `PATH`, you can use the shorter command:
 
 ```bash
-"$(npm prefix -g)/bin/daily-brief" setup
+daily-brief setup
 ```
 
 Daily Brief requires Node.js 22 or newer.
