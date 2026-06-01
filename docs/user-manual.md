@@ -11,6 +11,18 @@ npm install -g @chenpengfei/daily-brief
 daily-brief --help
 ```
 
+If installation succeeds but your shell reports `daily-brief: command not found`, npm installed the command into a global bin directory that is not in `PATH`. Run the installed command directly:
+
+```bash
+"$(npm prefix -g)/bin/daily-brief" setup
+```
+
+Then add npm's global bin directory to your shell `PATH`:
+
+```bash
+export PATH="$(npm prefix -g)/bin:$PATH"
+```
+
 Daily Brief requires Node.js 22 or newer.
 
 ## First Setup
@@ -121,6 +133,12 @@ If setup has not run, run:
 
 ```bash
 daily-brief setup
+```
+
+If `daily-brief` is not found after a successful global install, run:
+
+```bash
+"$(npm prefix -g)/bin/daily-brief" setup
 ```
 
 If Sources are not collected, run:

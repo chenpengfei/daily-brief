@@ -43,10 +43,12 @@ describe("package metadata", () => {
         "docs/operations.md",
         "docs/user-manual.md",
         "docs/release-workflow.md",
+        "scripts/postinstall.mjs",
         "README.md",
         "CHANGELOG.md"
       ])
     );
+    expect(pkg.scripts?.postinstall).toBe("node scripts/postinstall.mjs");
     expect(pkg.scripts?.["release:check"]).toBe("npm test && npm run typecheck && npm run build && npm pack --dry-run");
     expect(pkg.scripts?.["release:publish:dry-run"]).toBe("npm publish --dry-run --access public");
   });

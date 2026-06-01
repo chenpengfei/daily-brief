@@ -11,6 +11,12 @@ npm install -g @chenpengfei/daily-brief
 daily-brief setup
 ```
 
+If your shell cannot find `daily-brief` after installation, run it through npm's global bin path once:
+
+```bash
+"$(npm prefix -g)/bin/daily-brief" setup
+```
+
 Daily Brief requires Node.js 22 or newer.
 
 ## Use

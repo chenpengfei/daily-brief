@@ -30,6 +30,7 @@
     "docs/operations.md",
     "docs/user-manual.md",
     "docs/release-workflow.md",
+    "scripts/postinstall.mjs",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -41,6 +42,7 @@
     "build": "tsc -p tsconfig.json",
     "cli": "tsx src/cli.ts",
     "prepack": "npm run build",
+    "postinstall": "node scripts/postinstall.mjs",
     "release:check": "npm test && npm run typecheck && npm run build && npm pack --dry-run",
     "release:human": "node scripts/human-release.mjs",
     "release:publish:dry-run": "npm publish --dry-run --access public",
