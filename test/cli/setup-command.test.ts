@@ -65,6 +65,10 @@ describe("setup command", () => {
       expect(output.join("\n")).toContain("Model credential: missing");
       expect(output.join("\n")).toContain("Discord delivery: disabled");
       expect(output.join("\n")).toContain("Ready to run:");
+      expect(output).toContain("prompt:Login to openai-codex now? [Y/n]:");
+      expect(output).toContain("prompt:Enable Discord delivery? [y/N]:");
+      expect(output.join("\n")).toContain("Credential name identifies where Daily Brief finds the model secret.");
+      expect(output).toContain("prompt:Model credential name (openai-codex.default):");
       await expect(readFile(join(data, "briefs", "2026", "05", "2026-05-28.md"), "utf8")).rejects.toThrow("ENOENT");
     } finally {
       await rm(home, { recursive: true, force: true });
@@ -157,6 +161,29 @@ describe("setup command", () => {
       expect(auth).toContain("secret-value");
       expect(auth).toContain("https://discord.example/webhook");
       expect(output.join("\n")).toContain("Stored credential: openai.work");
+      expect(output.join("\n")).toContain("Discord webhook stored: discord.default");
+      expect(output).toContain("prompt:Store API key in credential store? API key input may be visible in this terminal. [y/N]:");
+      expect(output).toContain("prompt:Enable Discord delivery? [y/N]:");
+      expect(output).toContain("prompt:Discord webhook credential name (discord.default):");
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts short y/n answers in yes-no setup prompts", async () => {
+    const home = await mkdtemp(join(tmpdir(), "daily-brief-home-"));
+    const output: string[] = [];
+
+    try {
+      await runCli(
+        ["setup"],
+        promptingOutput(output, ["", "openai", "", "openai.work", "y", "secret-value", "y", "", "https://discord.example/webhook"]),
+        { DAILY_BRIEF_HOME: home, TZ: "Asia/Shanghai" }
+      );
+
+      const config = await readFile(join(home, "config.yaml"), "utf8");
+      expect(config).toContain("credentialRef: openai.work");
+      expect(config).toContain("webhookRef: discord.default");
       expect(output.join("\n")).toContain("Discord webhook stored: discord.default");
     } finally {
       await rm(home, { recursive: true, force: true });

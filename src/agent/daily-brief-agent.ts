@@ -29,6 +29,7 @@ export interface RunOnceOptions {
   agentRunRoot?: string;
   sourceItemRoot?: string;
   discordWebhookUrl?: string;
+  discordEnv?: Partial<Record<string, string | undefined>>;
   discordFetchImpl?: typeof fetch;
   discordTemplatePath?: string;
   modelRuntimeEnv?: ModelRuntimeEnv;
@@ -89,6 +90,7 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
     };
     const delivery = await deliverCoreFailureNotification(coreFailure, {
       ...(options.discordWebhookUrl ? { webhookUrl: options.discordWebhookUrl } : {}),
+      ...(options.discordEnv ? { env: options.discordEnv } : {}),
       ...(options.discordFetchImpl ? { fetchImpl: options.discordFetchImpl } : {})
     });
 
@@ -110,6 +112,7 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
   if (collectionFailure) {
     const delivery = await deliverCoreFailureNotification(collectionFailure, {
       ...(options.discordWebhookUrl ? { webhookUrl: options.discordWebhookUrl } : {}),
+      ...(options.discordEnv ? { env: options.discordEnv } : {}),
       ...(options.discordFetchImpl ? { fetchImpl: options.discordFetchImpl } : {})
     });
 
@@ -424,6 +427,7 @@ export async function deliverOnce(
     },
     {
       ...(options.discordWebhookUrl ? { webhookUrl: options.discordWebhookUrl } : {}),
+      ...(options.discordEnv ? { env: options.discordEnv } : {}),
       ...(options.discordFetchImpl ? { fetchImpl: options.discordFetchImpl } : {})
     }
   );

@@ -33,6 +33,8 @@ If npm's global bin directory is in `PATH`, `daily-brief setup` is equivalent.
 
 Setup is an interactive wizard. It creates user configuration and generated-data directories, initializes the Source Registry from the packaged example, prepares credential storage, guides LLM Provider setup, offers optional Discord Delivery setup, and reports readiness. Setup does not collect Sources, call an LLM, generate a Daily Brief, or send a delivery notification.
 
+Yes/no prompts show the default in brackets: `[y/N]` means pressing Enter chooses no, and `[Y/n]` means pressing Enter chooses yes. You can type `y`, `yes`, `n`, or `no`.
+
 By default, configuration files live under `~/.daily-brief/`, and generated data lives under `~/.daily-brief/data/`.
 
 `daily-brief setup` requires interactive input. For CI or scripted setup, write `config.yaml`, `sources.yaml`, and `auth.json` directly under `DAILY_BRIEF_HOME`, and use `DAILY_BRIEF_DATA_HOME` when generated data should live elsewhere.
@@ -59,7 +61,7 @@ Agent Stages require an LLM Provider Configuration before real Daily Brief gener
 daily-brief setup
 ```
 
-Use the setup wizard to choose the provider, model, credential reference, and optional login/API key storage path. Credentials are stored in the Model Credential Store or environment variables. Do not put secrets in `sources.yaml` or committed project files.
+Use the setup wizard to choose the provider, model, credential name, and optional login/API key storage path. The credential name is a stable label, such as `openai.default` or `env:OPENAI_API_KEY`, that lets `config.yaml` find the secret in `auth.json` or in the shell environment. Do not put secrets in `sources.yaml` or committed project files.
 
 ## Configure Delivery
 

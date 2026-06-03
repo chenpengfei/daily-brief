@@ -58,7 +58,7 @@ const consoleIo: CliIo = {
       throw new Error(nonInteractiveSetupMessage());
     }
 
-    const reader = createInterface({ input: processStdin, output: processStdout });
+    const reader = createInterface({ input: processStdin, output: processStdout, terminal: false });
 
     try {
       return await reader.question(`${message} `);
@@ -384,9 +384,12 @@ async function configureModelThroughSetup(io: CliIo, env: CliEnv): Promise<void>
     await promptWithDefault(io, "LLM Provider (openai-codex/openai/deepseek/openai-compatible)", current.provider)
   );
   const model = await promptWithDefault(io, "Model", current.provider === provider ? current.model : defaultModelForProvider(provider));
+  io.stdout(
+    "Credential name identifies where Daily Brief finds the model secret. Use the default unless you manage multiple credentials; env:NAME reads an environment variable."
+  );
   const credentialRef = await promptWithDefault(
     io,
-    "Credential ref",
+    "Model credential name",
     current.provider === provider ? current.credentialRef ?? defaultCredentialRef(provider) ?? "" : defaultCredentialRef(provider) ?? ""
   );
   const baseUrl =
@@ -403,7 +406,7 @@ async function configureModelThroughSetup(io: CliIo, env: CliEnv): Promise<void>
   writeModelConfig(config, paths.configPath);
   io.stdout(`Model configured: ${provider}/${model}`);
   if (credentialRef) {
-    io.stdout(`Credential Ref: ${credentialRef}`);
+    io.stdout(`Model credential name: ${credentialRef}`);
   }
 
   await maybeConfigureModelCredential({ provider, credentialRef, io, env });
@@ -454,7 +457,7 @@ async function maybeConfigureModelCredential(input: {
       return;
     }
 
-    const storedRef = await promptWithDefault(input.io, "Stored credential ref", `${input.provider}.default`);
+    const storedRef = await promptWithDefault(input.io, "Stored credential name", `${input.provider}.default`);
     const apiKey = await promptWithDefault(input.io, "API key input may be visible in this terminal. API key", "");
     if (apiKey) {
       putCredential(storedRef, toApiKeyCredential(input.provider, apiKey), paths.authPath);
@@ -491,7 +494,7 @@ async function configureDeliveryThroughSetup(io: CliIo, env: CliEnv): Promise<vo
     return;
   }
 
-  const webhookRef = await promptWithDefault(io, "Discord webhook credential ref", current?.webhookRef ?? "discord.default");
+  const webhookRef = await promptWithDefault(io, "Discord webhook credential name", current?.webhookRef ?? "discord.default");
   writeDeliveryConfig({ enabled: true, webhookRef }, paths.configPath);
   const credential = getCredential(webhookRef, paths.authPath);
 
@@ -512,7 +515,16 @@ async function configureDeliveryThroughSetup(io: CliIo, env: CliEnv): Promise<vo
 }
 
 async function promptYesNo(io: CliIo, label: string, defaultValue: boolean): Promise<boolean> {
-  const answer = (await promptWithDefault(io, label, defaultValue ? "yes" : "no")).toLowerCase();
+  if (!io.prompt) {
+    throw new Error(nonInteractiveSetupMessage());
+  }
+
+  const suffix = defaultValue ? "[Y/n]" : "[y/N]";
+  const answer = (await io.prompt(`${label} ${suffix}:`)).trim().toLowerCase();
+  if (!answer) {
+    return defaultValue;
+  }
+
   if (answer === "y" || answer === "yes" || answer === "true") {
     return true;
   }
@@ -521,7 +533,7 @@ async function promptYesNo(io: CliIo, label: string, defaultValue: boolean): Pro
     return false;
   }
 
-  throw new Error(`${label} requires yes or no`);
+  throw new Error(`${label} requires y/yes or n/no`);
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -663,6 +675,7 @@ function optionsFromEnv(env: CliEnv) {
     agentRunRoot: paths.agentRunRoot,
     archiveRoot: paths.briefArchiveRoot,
     modelRuntimeEnv: env,
+    discordEnv: env,
     ...(discordWebhookUrl ? { discordWebhookUrl } : {}),
     ...(env.DAILY_BRIEF_DISCORD_TEMPLATE_PATH ? { discordTemplatePath: env.DAILY_BRIEF_DISCORD_TEMPLATE_PATH } : {})
   };
