@@ -12,7 +12,7 @@ https://github.com/chenpengfei/daily-brief/issues/15
 
 ## Outcome
 
-`daily-brief setup` provides the first-use Setup Wizard, creates required user files and data directories, initializes Sources from the packaged example, guides model provider and optional delivery configuration through focused modules, uses simple skip-or-overwrite behavior during reconfiguration, and ends with a readiness check without running the daily workflow.
+`daily-brief setup` provides the first-use Setup Wizard, creates required user files and data directories, initializes Sources from the packaged example, guides model provider and optional delivery configuration in one interactive flow, preserves existing files by default during reconfiguration, and ends with a readiness check without running the daily workflow.
 
 ## Scope
 
@@ -24,18 +24,20 @@ https://github.com/chenpengfei/daily-brief/issues/15
 - Timezone detection, confirmation, and persistence.
 - Fixed first-version `brief.language: zh`.
 - Guidance to edit the user-home Source Registry YAML and validate it.
-- Guided handoff into focused model and delivery configuration modules.
+- Guided LLM Provider, credential, and optional Discord Delivery configuration inside setup.
 - Readiness check at the end of setup.
-- Reentrant setup with simple skip-or-overwrite behavior that avoids deleting generated data.
+- Reentrant setup with explicit preserve-or-update prompts that avoid deleting credentials or generated data.
+- Non-interactive setup failure with actionable file/environment-variable configuration guidance.
 
 ### Excludes
 
 - Running collection, model calls, brief generation, or delivery during setup.
 - Built-in scheduler configuration or scheduler-specific guidance.
-- Full model provider transport implementation beyond the focused model module.
+- Full model provider transport implementation beyond the model configuration internals.
 - Field-by-field interactive Source add/edit wizard.
-- Delivery Channel credential internals beyond the focused delivery module.
-- Fine-grained config merge or partial replacement semantics beyond explicit skip or overwrite.
+- Delivery Channel credential internals beyond setup-managed Discord configuration.
+- `--force` or any force-overwrite setup flag.
+- Fine-grained config merge or partial replacement semantics beyond explicit preserve or update.
 - Named profiles.
 
 ## Acceptance Criteria
@@ -45,10 +47,10 @@ https://github.com/chenpengfei/daily-brief/issues/15
   Then user config files and data directories exist with valid initial contents,
   Evidence: CLI integration test using a temporary `DAILY_BRIEF_HOME` and `DAILY_BRIEF_DATA_HOME`.
 
-- Given focused model and delivery configuration modules exist,
+- Given setup runs interactively,
   When `daily-brief setup` runs,
   Then setup can initialize Sources, show the Source Registry edit/validate path, and guide LLM Provider configuration plus optional Discord Delivery configuration from one flow,
-  Evidence: setup integration test with mocked focused configuration modules.
+  Evidence: setup integration test with prompt-backed model and delivery choices.
 
 - Given setup reaches timezone configuration,
   When the system timezone is detectable,
@@ -56,9 +58,14 @@ https://github.com/chenpengfei/daily-brief/issues/15
   Evidence: setup test with mocked timezone detection.
 
 - Given setup is rerun with existing files,
-  When the user skips a section or confirms overwrite,
-  Then skipped values and credentials are preserved, selected config files are directly overwritten when confirmed, and generated data is not deleted,
+  When the user keeps existing values,
+  Then existing values and credentials are preserved by default and generated data is not deleted,
   Evidence: setup reentrancy test.
+
+- Given setup is invoked with `--force`,
+  When the command runs,
+  Then it fails clearly because setup does not accept force-overwrite flags,
+  Evidence: setup command-boundary test.
 
 - Given setup completes,
   When readiness validation runs,
@@ -72,8 +79,10 @@ https://github.com/chenpengfei/daily-brief/issues/15
   - `npm run typecheck`
 - Tests:
   - Setup fresh-home test.
-  - Setup focused-module integration test.
+  - Setup prompt-backed model and delivery configuration test.
   - Setup reentrant test.
+  - Setup non-interactive failure test.
+  - Setup `--force` rejection test.
   - Readiness check test.
 - Files:
   - CLI setup command.
@@ -95,9 +104,8 @@ https://github.com/chenpengfei/daily-brief/issues/15
   - Source Registry parser exists.
   - `config/sources.example.yaml` exists.
 - Likely gaps:
-  - No setup command exists.
-  - No user home config writer exists.
-  - No readiness check combines all required configuration areas yet.
+  - Older docs and goal maps may still mention separate public model/delivery commands.
+  - Setup prompt copy and readiness output may need product review after implementation.
 
 ## PRD Traceability
 

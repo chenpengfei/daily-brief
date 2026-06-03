@@ -35,6 +35,7 @@ export interface RunOnceOptions {
   sourceCount?: number;
   partialFailures?: string[];
   collectionFailures?: Array<{ sourceId: string; reason: string }>;
+  onProgress?: (line: string) => void;
 }
 
 export interface RunOnceResult {
@@ -66,6 +67,7 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
   let collection: CollectionRunResult;
 
   try {
+    options.onProgress?.("1/5 Collecting Source Items");
     collection = await collectSources({
       date,
       ...(dateKey ? { dateKey } : {}),
@@ -73,6 +75,13 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
       ...(options.sourceRegistryPath ? { sourceRegistryPath: options.sourceRegistryPath } : {}),
       ...(options.sourceItemRoot ? { sourceItemRoot: options.sourceItemRoot } : {})
     });
+    for (const source of collection.sources) {
+      options.onProgress?.(
+        `- ${source.sourceId}: ${source.status}, items ${source.itemCount}, written ${source.writtenCount}, duplicates ${source.skippedDuplicateCount}${
+          source.reason ? `, ${source.reason}` : ""
+        }`
+      );
+    }
   } catch (error) {
     const coreFailure: CoreWorkflowFailure = {
       kind: "unreadable-source-registry",
@@ -117,6 +126,7 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
   }
 
   const collectionFailures = collectionFailureRefs(collection);
+  options.onProgress?.("2/5 Generating Daily Brief");
   const generated = await generateOnce({
     ...options,
     ...(dateKey ? { dateKey } : {}),
@@ -128,6 +138,7 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
         }
       : {})
   });
+  options.onProgress?.("4/5 Delivering Notification");
   const delivery = await deliverOnce({
     ...options,
     date,
@@ -183,6 +194,7 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
     const collectionInputRefs = options.collectionFailures
       ? { collectionFailures: options.collectionFailures }
       : undefined;
+    options.onProgress?.("- Understanding Source Items");
     const understanding = await runSourceItemUnderstandingStage({
       sourceItems,
       modelRuntimeConfig,
@@ -190,6 +202,7 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
       ...(collectionInputRefs ? { inputRefs: collectionInputRefs } : {}),
       ...(options.modelRuntimeEnv ? { modelRuntimeEnv: options.modelRuntimeEnv } : {})
     });
+    options.onProgress?.("- Selecting and Ranking Signals");
     const selected = await runSignalSelectionAndRankingStages({
       sourceItems,
       annotations: understanding.annotations,
@@ -207,6 +220,7 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
       signals: selected.signals
     };
     const narrativeEvents: string[] = [];
+    options.onProgress?.("- Writing Narrative");
     const narrative = await enrichDailyBriefNarrativeWithAgent({
       brief: selectedBrief,
       sourceItems,
@@ -221,6 +235,7 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
       brief: narrative.brief,
       ...(options.collectionFailures ? { collectionFailures: options.collectionFailures } : {})
     });
+    options.onProgress?.("- Checking Source Grounding");
     const audited = await auditBriefWithSingleRepairAttempt({
       narrativeBrief: narrative.brief,
       sourceItems,
@@ -235,6 +250,7 @@ export async function generateOnce(options: RunOnceOptions = {}): Promise<Genera
     const writtenArtifact = options.agentRunRoot ? await writeAgentRunArtifact(artifact, date, options.agentRunRoot, dateKey) : undefined;
     const markdown = renderDailyBriefMarkdown(audited.brief);
     const piResult = await renderBriefThroughPiRuntime(markdown);
+    options.onProgress?.("3/5 Archiving Daily Brief");
     const archived = await writeBriefArchive(piResult.markdown, date, options.archiveRoot, dateKey);
 
     return {

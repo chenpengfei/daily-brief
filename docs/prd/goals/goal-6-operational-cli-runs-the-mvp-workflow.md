@@ -8,18 +8,18 @@
 
 ## Outcome
 
-The Operational CLI exposes the MVP control surface for collection, generation, delivery, status, full workflow execution, and Source management, and `run-once` exercises the Pi Agent Runtime while running the workflow in order.
+The Operational CLI exposes the MVP control surface for setup, Manual Runs, status, version reporting, and Source management, while `run-once` internally performs collection, generation, archive writing, and delivery in order.
 
 ## Scope
 
 ### Includes
 
-- CLI commands: `collect`, `generate`, `deliver`, `status`, `run-once`, `sources list`, `sources enable <source-id>`, and `sources disable <source-id>`.
+- CLI commands: `setup`, `run-once`, `status`, `version`, `sources list`, `sources edit`, `sources validate`, `sources enable <source-id>`, and `sources disable <source-id>`.
 - Help output listing all supported commands.
 - Non-zero exit behavior for unknown commands and invalid source commands.
 - `run-once` orchestration of collection, brief generation, archive writing, and Discord Delivery.
-- Pi Agent Runtime participation in Daily Brief rendering, visible through event evidence.
-- Command-level output that reports archive path, source counts, Source Item counts, delivery status, and collection/status summaries where applicable.
+- Pi Agent Runtime participation in Daily Brief rendering, surfaced as human-readable Agent Stage progress by default.
+- Command-level output that reports archive path, source counts, Source Item counts, delivery status, collection summaries, and Source ID guidance where applicable.
 
 ### Excludes
 
@@ -33,7 +33,7 @@ The Operational CLI exposes the MVP control surface for collection, generation, 
 
 - Given the installed project,
   When `npm run cli -- --help` runs,
-  Then help output lists `run-once`, `collect`, `generate`, `deliver`, `status`, `sources list`, `sources enable <source-id>`, and `sources disable <source-id>`,
+  Then help output lists the supported public commands and omits `collect`, `generate`, `deliver`, `model`, and `delivery`,
   Evidence: `npm test -- test/cli/help.test.ts` or CLI boundary test covers help output; completion notes include sample output.
 
 - Given an unknown command,
@@ -53,13 +53,13 @@ The Operational CLI exposes the MVP control surface for collection, generation, 
 
 - Given no Sources are configured,
   When `runOnce` runs through the Pi Agent Runtime,
-  Then a low-signal Daily Brief is archived and Pi runtime events include `agent_start`,
-  Evidence: `npm test -- test/agent/run-once.test.ts` covers Pi runtime event evidence and low-signal archive output.
+  Then the workflow reports failure honestly rather than archiving a false normal Daily Brief,
+  Evidence: CLI and agent workflow tests cover no-usable-source failure behavior.
 
-- Given existing Source Items for a date,
-  When `generate` and `deliver` are run separately,
-  Then generation writes the expected archive path and delivery reports sent/skipped/failed status without requiring collection in the same command,
-  Evidence: `npm test -- test/agent/daily-workflow.test.ts` covers separate generate and deliver behavior.
+- Given `run-once` is executing,
+  When collection and Agent Stages progress,
+  Then the CLI prints human-readable phase output without raw Pi event names by default,
+  Evidence: CLI run-once output test.
 
 - Given the CLI `status` command runs,
   When Operational Status is available,
@@ -75,10 +75,11 @@ The Operational CLI exposes the MVP control surface for collection, generation, 
   - `npm test -- test/cli`
   - `npm run typecheck`
   - `npm run cli -- --help`
+  - `npm run cli -- --version`
 - Tests:
   - CLI boundary tests for help, unknown command, status, run-once output, and source subcommands.
   - Workflow orchestration tests.
-  - Pi Agent Runtime event evidence test.
+  - Human-readable run-once progress output test.
 - Files:
   - `src/cli.ts`
   - `src/agent/daily-brief-agent.ts`
@@ -88,6 +89,7 @@ The Operational CLI exposes the MVP control surface for collection, generation, 
   - `test/cli`
 - Logs/status:
   - Sample help output.
+  - Sample version output.
   - Sample `run-once` output.
   - Sample `status` output.
 
@@ -101,7 +103,7 @@ The Operational CLI exposes the MVP control surface for collection, generation, 
 - Existing:
   - `src/cli.ts` exposes the intended commands.
   - `runOnce`, `generateOnce`, and `deliverOnce` exist in `src/agent/daily-brief-agent.ts`.
-  - Workflow tests cover run-once orchestration, rerun deduplication, separate generate/deliver behavior, skipped delivery, and Pi runtime events.
+  - Workflow tests cover run-once orchestration, rerun deduplication, internal generate/deliver behavior, skipped delivery, and Pi runtime events.
   - `getOperationalStatus` supports the status command.
 - Likely gaps:
   - Dedicated CLI boundary tests appear to be missing.

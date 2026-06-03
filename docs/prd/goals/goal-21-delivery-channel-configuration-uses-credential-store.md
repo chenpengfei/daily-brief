@@ -12,18 +12,16 @@ https://github.com/chenpengfei/daily-brief/issues/15
 
 ## Outcome
 
-Daily Brief can configure optional Discord Delivery through focused CLI commands using credential references in `config.yaml` and secret values in `auth.json`, without storing webhooks in project files or making delivery part of the generation core.
+Daily Brief can configure optional Discord Delivery through the Setup Wizard using credential references in `config.yaml` and secret values in `auth.json`, without storing webhooks in project files or making delivery part of the generation core.
 
 ## Scope
 
 ### Includes
 
-- `daily-brief delivery configure`.
-- `daily-brief delivery status`.
-- `daily-brief delivery test`.
+- Discord Delivery configuration through `daily-brief setup`.
 - Discord webhook credential stored under a stable reference such as `discord.default`.
 - `config.yaml` delivery enabled state and `webhookRef`.
-- Secret-redacted delivery status.
+- Secret-redacted delivery readiness/status output.
 - Optional delivery: disabled delivery does not block generation or archive writing.
 
 ### Excludes
@@ -37,49 +35,42 @@ Daily Brief can configure optional Discord Delivery through focused CLI commands
 
 ## Acceptance Criteria
 
-- Given `daily-brief delivery configure` runs,
+- Given `daily-brief setup` reaches delivery configuration,
   When the user enables Discord and provides a webhook,
   Then `auth.json` stores the webhook under a stable credential reference and `config.yaml` stores the enabled state and `webhookRef`,
-  Evidence: CLI delivery configuration test.
+  Evidence: setup delivery configuration test.
 
 - Given Discord Delivery is disabled,
-  When `daily-brief delivery status` runs,
-  Then status reports delivery as disabled and generation remains valid without a webhook credential,
-  Evidence: delivery-disabled status test.
+  When setup completes,
+  Then readiness reports delivery as disabled and generation remains valid without a webhook credential,
+  Evidence: setup delivery-disabled test.
 
-- Given `daily-brief delivery status` runs,
+- Given delivery readiness/status output is printed,
   When a webhook credential exists,
   Then status reports readiness without printing the webhook URL,
   Evidence: status redaction test.
-
-- Given `daily-brief delivery test` runs with a configured webhook,
-  When the test transport is mocked,
-  Then a minimal deterministic test notification is sent through the configured credential reference,
-  Evidence: mocked delivery test.
 
 ## Evidence Required
 
 - Commands:
   - `npm test -- test/cli`
-  - `npm test -- test/discord`
   - `npm run typecheck`
 - Tests:
-  - Delivery configure test.
+  - Setup delivery configure test.
   - Delivery status redaction test.
   - Delivery disabled status test.
-  - Delivery test command with mocked transport.
 - Files:
-  - Delivery config command implementation.
+  - Setup Wizard delivery configuration path.
   - Credential store integration.
   - Discord delivery config reader.
 - Logs/status:
-  - Sample delivery status output with secret redacted.
+  - Sample setup/readiness output with secret redacted.
 
 ## Human Review Notes
 
 - Delivery setup should feel optional and safe.
 - The CLI should be clear that Discord is a notification channel, not the source of truth.
-- Keep first-version delivery intentionally small: credential, status, and test.
+- Keep first-version delivery intentionally small: credential and readiness/status.
 
 ## Current State Notes
 
@@ -88,8 +79,7 @@ Daily Brief can configure optional Discord Delivery through focused CLI commands
   - Discord tests cover transport behavior.
 - Likely gaps:
   - Delivery credential storage in `auth.json` does not exist.
-  - Delivery configuration commands do not exist.
-  - Delivery status currently does not resolve credential references.
+  - Older documentation may still mention removed public delivery commands.
 
 ## PRD Traceability
 

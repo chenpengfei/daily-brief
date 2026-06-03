@@ -35,9 +35,11 @@ describe("source CLI commands", () => {
 
       const saved = await readFile(registryPath, "utf8");
 
-      expect(output.join("\n")).toContain("enabled  simon-blog blog/rss https://example.com/feed.xml");
+      expect(output.join("\n")).toContain("SOURCE ID");
+      expect(output.join("\n")).toContain("simon-blog  enabled");
+      expect(output.join("\n")).toContain("daily-brief sources enable simon-blog");
       expect(output.join("\n")).toContain("Disabled Source: simon-blog");
-      expect(output.join("\n")).toContain("disabled simon-blog blog/rss https://example.com/feed.xml");
+      expect(output.join("\n")).toContain("simon-blog  disabled");
       expect(output.join("\n")).toContain("Enabled Source: simon-blog");
       expect(saved).toContain("enabled: true");
       expect(saved).toContain("notes: Useful Agent architecture writing");
@@ -57,7 +59,7 @@ describe("source CLI commands", () => {
         runCli(["sources", "enable", "missing-source"], captureOutput([]), {
           DAILY_BRIEF_HOME: directory
         })
-      ).rejects.toThrow("Source not found: missing-source");
+      ).rejects.toThrow("Source not found: missing-source. Run daily-brief sources list to see available SOURCE ID values.");
 
       const saved = await readFile(registryPath, "utf8");
       expect(saved).toBe("sources: []\n");
@@ -68,7 +70,7 @@ describe("source CLI commands", () => {
 
   it("requires a Source id for enable and disable commands", async () => {
     await expect(runCli(["sources", "disable"], captureOutput([]), {})).rejects.toThrow(
-      "sources disable requires a Source id"
+      "sources disable requires a SOURCE ID. Run daily-brief sources list to see available SOURCE ID values."
     );
   });
 
@@ -123,8 +125,11 @@ describe("source CLI commands", () => {
     try {
       await runCli(["sources", "edit"], captureOutput(output), { DAILY_BRIEF_HOME: directory });
 
-      expect(output.join("\n")).toContain(`Source Registry: ${join(directory, "sources.yaml")}`);
+      expect(output.join("\n")).toContain("Source Registry:");
+      expect(output.join("\n")).toContain(join(directory, "sources.yaml"));
+      expect(output.join("\n")).toContain("Use the id field as SOURCE ID");
       expect(output.join("\n")).toContain("daily-brief sources validate");
+      expect(output.join("\n")).toContain("daily-brief sources list");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

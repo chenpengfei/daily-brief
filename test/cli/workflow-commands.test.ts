@@ -15,11 +15,30 @@ describe("workflow CLI commands", () => {
     await runCli(["--help"], captureOutput(output), {});
 
     expect(output.join("\n")).toContain("daily-brief run-once");
-    expect(output.join("\n")).toContain("daily-brief collect");
-    expect(output.join("\n")).toContain("daily-brief generate");
-    expect(output.join("\n")).toContain("daily-brief deliver");
     expect(output.join("\n")).toContain("daily-brief status");
     expect(output.join("\n")).toContain("daily-brief sources list");
+    expect(output.join("\n")).toContain("daily-brief version");
+    expect(output.join("\n")).not.toContain("daily-brief collect");
+    expect(output.join("\n")).not.toContain("daily-brief generate");
+    expect(output.join("\n")).not.toContain("daily-brief deliver");
+    expect(output.join("\n")).not.toContain("daily-brief model");
+    expect(output.join("\n")).not.toContain("daily-brief delivery");
+    expect(output.join("\n")).not.toContain("--force");
+  });
+
+  it("prints package version from version commands", async () => {
+    const output: string[] = [];
+
+    await runCli(["version"], captureOutput(output), {});
+    await runCli(["--version"], captureOutput(output), {});
+
+    expect(output).toEqual(["daily-brief 0.1.1", "daily-brief 0.1.1"]);
+  });
+
+  it("fails clearly for removed public workflow and configuration commands", async () => {
+    for (const command of ["collect", "generate", "deliver", "model", "delivery"]) {
+      await expect(runCli([command], captureOutput([]), {})).rejects.toThrow(`Unknown command: ${command}`);
+    }
   });
 
   it("fails clearly for unknown commands", async () => {
@@ -81,9 +100,15 @@ describe("workflow CLI commands", () => {
       const archiveLine = output.find((line) => line.startsWith("Daily Brief archived: "));
       const archivePath = archiveLine?.replace("Daily Brief archived: ", "");
 
+      expect(output.join("\n")).toContain("1/5 Collecting Source Items");
+      expect(output.join("\n")).toContain("- Understanding Source Items");
+      expect(output.join("\n")).toContain("- Selecting and Ranking Signals");
+      expect(output.join("\n")).toContain("- Writing Narrative");
+      expect(output.join("\n")).toContain("- Checking Source Grounding");
       expect(output.join("\n")).toContain("Sources read: 1");
       expect(output.join("\n")).toContain("Discord delivery: skipped");
-      expect(output.join("\n")).toContain("Pi events:");
+      expect(output.join("\n")).toContain("Agent stages completed: 5/5");
+      expect(output.join("\n")).not.toContain("Pi events:");
       expect(archivePath).toBeTruthy();
       expect(await readFile(String(archivePath), "utf8")).toContain("### Agent runtime patterns");
     } finally {

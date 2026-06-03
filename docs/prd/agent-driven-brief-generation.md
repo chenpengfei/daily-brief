@@ -178,16 +178,9 @@ The configuration must also support:
 
 Daily Brief must not hand-roll Codex request payloads, backend URLs, headers, or token refresh when Pi already supplies the transport and OAuth helpers.
 
-## Model Configuration CLI
+## Model Configuration Through Setup
 
-The Operational CLI should provide a model configuration surface:
-
-- `daily-brief model configure`
-- `daily-brief model login`
-- `daily-brief model logout`
-- `daily-brief model status`
-
-`model configure` should offer an interactive provider selection wizard and non-interactive flags for automation.
+The Operational CLI should guide model configuration through `daily-brief setup` rather than a separate public `model` command family.
 
 The wizard should default to the recommended `openai-codex` / `gpt-5.5` path while allowing alternatives such as OpenAI API, DeepSeek, and OpenAI-compatible custom endpoints.
 
@@ -207,7 +200,7 @@ The Setup Wizard should detect the system timezone, ask the user to confirm or c
 
 The first version should keep Brief Language fixed as `zh` while preserving important English technical terms, project names, repository names, paper titles, and source titles. `config.yaml` may include `brief.language: zh` for future expansion, but setup should not offer multi-language generation in the first version.
 
-Discord Delivery should be an optional Setup Wizard step. When enabled, the wizard should collect the Discord webhook as a credential, store it under a stable reference such as `discord.default` in `auth.json`, write the matching `webhookRef` and enabled state in `config.yaml`, and offer a test message. When disabled, Daily Brief generation and archiving remain valid.
+Discord Delivery should be an optional Setup Wizard step. When enabled, the wizard should collect the Discord webhook as a credential, store it under a stable reference such as `discord.default` in `auth.json`, and write the matching `webhookRef` and enabled state in `config.yaml`. When disabled, Daily Brief generation and archiving remain valid.
 
 Discord notification content should be deterministic and minimal in the first version: enough to confirm the configured webhook can receive Daily Brief notifications, without a separate LLM call and without rich formatting requirements. Rich Daily Brief notification rendering and workflow failure notifications are deferred.
 
@@ -258,7 +251,7 @@ brief:
 
 The real credentials referenced by `credentialRef` and `webhookRef` belong in `auth.json` or the runtime environment. The Source Registry belongs in `sources.yaml`.
 
-`auth.json` should be treated as a CLI-managed credential store rather than a hand-edited configuration file. The Setup Wizard and focused configuration commands should write OAuth tokens, API keys, Discord webhooks, provider metadata, and environment-backed credential references into this store. Status commands may show whether a credential exists, what provider it belongs to, and whether it appears refreshable, but must not print secret values. The file should be created with restrictive permissions where the platform supports it.
+`auth.json` should be treated as a Setup Wizard-managed credential store rather than a hand-edited configuration file for normal interactive use. The Setup Wizard should write OAuth tokens, API keys, Discord webhooks, provider metadata, and environment-backed credential references into this store. Non-interactive automation may create the file directly. Status output may show whether a credential exists, what provider it belongs to, and whether it appears refreshable, but must not print secret values. The file should be created with restrictive permissions where the platform supports it.
 
 Credential references in `config.yaml` should use stable names such as `provider.name`, for example `deepseek.default`, `openai-codex.default`, or `discord.default`. Environment-backed credentials should use `env:NAME`. `auth.json` should store credentials by these stable reference names, including their type and provider metadata, while status commands display the reference name and readiness rather than the secret value.
 
@@ -268,41 +261,30 @@ The project repository should contain example configuration such as `config/sour
 
 The npm package should expose a `bin` entry for `daily-brief`. The built CLI should not depend on a repository checkout at runtime, and setup examples should either be packaged with the npm artifact or embedded in the application so `daily-brief setup` can initialize user files after installation.
 
-The installed CLI should organize commands around setup, workflow execution, and focused configuration:
+The installed CLI should organize commands around setup, Manual Runs, status, Source Registry management, and version reporting:
 
 ```text
 daily-brief setup
 
-daily-brief run-once
-daily-brief collect
-daily-brief generate
-daily-brief deliver
+daily-brief run-once [--date YYYY-MM-DD]
 daily-brief status
+daily-brief version
 
 daily-brief sources list
 daily-brief sources edit
 daily-brief sources enable
 daily-brief sources disable
 daily-brief sources validate
-
-daily-brief model configure
-daily-brief model login
-daily-brief model logout
-daily-brief model status
-
-daily-brief delivery configure
-daily-brief delivery status
-daily-brief delivery test
 ```
 
-`setup` is the full guided configuration path. `sources`, `model`, and `delivery` commands are focused configuration surfaces. Workflow commands such as `run-once`, `collect`, `generate`, `deliver`, and `status` must remain non-interactive for external schedulers.
+`setup` is the full guided configuration path. Lower-level workflow phases and provider/delivery configuration helpers may remain internal capabilities, but they are not public CLI commands in the first installed version. Workflow commands such as `run-once` and `status` must remain non-interactive for external schedulers.
 
-Workflow command semantics should remain decomposable:
+Workflow command internals should remain decomposable:
 
-- `collect` reads the configured Source Registry and writes Source Items under the generated data root.
-- `generate` reads Source Items, runs the required Agent Stages, writes an Agent Run Artifact, and writes a Brief Archive entry only when generation succeeds.
-- `deliver` reads the Brief Archive entry and sends a minimal configured Delivery Channel notification when delivery is enabled.
-- `run-once` executes `collect` and `generate` in order, then invokes `deliver` only when delivery is enabled.
+- collection reads the configured Source Registry and writes Source Items under the generated data root.
+- generation reads Source Items, runs the required Agent Stages, writes an Agent Run Artifact, and writes a Brief Archive entry only when generation succeeds.
+- delivery reads the Brief Archive entry and sends a minimal configured Delivery Channel notification when delivery is enabled.
+- `run-once` executes those phases in order.
 
 Source Item collection for the same date should be deduplicating and append-only. New Source Items are appended to `data/source-items/YYYY/MM/YYYY-MM-DD.jsonl`, while already-seen ids or content hashes are skipped; collection reruns should not delete previously collected items for that date.
 
@@ -310,7 +292,7 @@ Collection failures should be classified before generation. An unreadable Source
 
 Brief Archive entries should use a stable date path and be overwritten directly when the same date is regenerated. Agent Run Artifacts carry the audit history for generation attempts; the Markdown Brief Archive represents the current reader-facing version for that date.
 
-Workflow commands should default to the current local date, using the timezone configured in `config.yaml`, and support `--date YYYY-MM-DD` for replay, debugging, and manual reruns. `collect --date` writes Source Items for that date, `generate --date` reads that date's Source Items and writes that date's Agent Run Artifact and Brief Archive entry, and `deliver --date` sends the notification for that date's Brief Archive entry when delivery is enabled.
+Workflow commands should default to the current local date, using the timezone configured in `config.yaml`, and `run-once` should support `--date YYYY-MM-DD` for replay, debugging, and manual reruns.
 
 `status` should include both configuration readiness and recent run state. Configuration readiness should report the active home and data directories, Source Registry parse status, selected model provider and model, credential readiness without secret values, Delivery Channel enabled/disabled state, and data directory writability. Recent run state should summarize the latest known collection, generation, Brief Archive, Agent Run Artifact, and delivery result from the generated data directory when present.
 
@@ -327,15 +309,15 @@ The Operational CLI should provide setup and configuration commands that create 
 
 Environment variables should remain available for supported runtime overrides, but Source Registry location should be derived from `DAILY_BRIEF_HOME` rather than a separate Source Registry path variable.
 
-Setup must be explicit. `daily-brief setup` should create the user configuration directory, initialize `config.yaml`, initialize `sources.yaml` from the repository example or an embedded example, create an empty credential store such as `auth.json` with restrictive permissions where possible, create the generated data directory, guide LLM Provider selection and authentication, and configure delivery settings when requested. Reconfiguration should stay simple: preserve skipped existing files, directly overwrite selected config files when the user confirms replacement or passes a force option, and never delete generated data.
+Setup must be explicit and interactive. `daily-brief setup` should create the user configuration directory, initialize `config.yaml`, initialize `sources.yaml` from the repository example or an embedded example, create an empty credential store such as `auth.json` with restrictive permissions where possible, create the generated data directory, guide LLM Provider selection and authentication, and configure delivery settings when requested. Reconfiguration should stay simple: preserve existing files by default, directly overwrite selected non-secret config files only when the user confirms replacement, and never delete credentials or generated data. `setup` does not accept a force-overwrite flag.
 
-After setup, users should be able to rerun `daily-brief setup` for complete reconfiguration, and also configure individual areas through focused commands such as model, sources, and delivery configuration commands. Re-running setup should show current status for Sources, LLM Provider, credentials, Delivery Channels, and data paths; preserve skipped areas; hide secret values; and avoid deleting generated data. The first version does not need fine-grained merge or partial replacement semantics beyond explicit overwrite or skip.
+After setup, users should be able to rerun `daily-brief setup` for complete reconfiguration. Source Registry inspection and validation remain available through `sources` commands; LLM Provider and Delivery Channel configuration are handled by setup. Re-running setup should show current status for Sources, LLM Provider, credentials, Delivery Channels, and data paths; preserve skipped areas; hide secret values; and avoid deleting generated data. The first version does not need fine-grained merge or partial replacement semantics beyond explicit overwrite or skip.
 
 At the end of setup, the CLI should run a readiness check equivalent to status validation: configuration files exist, `sources.yaml` parses, the selected model provider is configured, credential references resolve, enabled delivery channels have credentials, and the generated data directory is writable. Setup should not automatically run collection, call an LLM, generate a brief, or deliver a notification.
 
 The first version should not introduce named profiles. Users who need separate personal, work, test, or CI configurations can use different `DAILY_BRIEF_HOME` and `DAILY_BRIEF_DATA_HOME` values instead of a `--profile` command surface.
 
-Scheduled or workflow commands such as `run-once`, `collect`, and `generate` must not auto-initialize missing configuration or start the Setup Wizard. If user configuration is missing, they should fail non-interactively with an actionable message instructing the operator to run `daily-brief setup`.
+Scheduled or workflow commands such as `run-once` must not auto-initialize missing configuration or start the Setup Wizard. If user configuration is missing, they should fail non-interactively with an actionable message instructing the operator to run `daily-brief setup`.
 
 ## Scheduler Boundary
 
@@ -343,7 +325,7 @@ Daily Brief remains scheduler-neutral.
 
 The project does not implement a long-running Gateway or built-in cron scheduler. External schedulers may invoke stable CLI commands such as `daily-brief run-once`.
 
-Scheduled commands must be non-interactive. If provider configuration or credentials are missing, `run-once` and `generate` must fail with actionable instructions rather than starting an interactive setup wizard.
+Scheduled commands must be non-interactive. If provider configuration or credentials are missing, `run-once` must fail with actionable instructions rather than starting an interactive setup wizard.
 
 ## Goal Issue Index
 
@@ -374,11 +356,11 @@ Goal issue planning lives in `docs/prd/agent-driven-brief-generation-goal-map.md
 - Given a low-signal day, when Agent Stages successfully conclude no strong Signals should be selected, then a low-signal Daily Brief may be archived.
 - Given Daily Brief is installed, when `daily-brief setup` completes in a fresh user home, then it creates user configuration files, initializes Sources, guides model and optional delivery configuration, and ends with readiness output without running the daily workflow.
 - Given a user manages Sources, when `daily-brief sources list/edit/enable/disable/validate` runs, then the CLI operates on the user-home Source Registry and reports schema errors without reading repository-local personal Sources.
-- Given `daily-brief model configure`, when run interactively, then it guides the user through provider and model selection without storing secrets in Source Registry.
-- Given `daily-brief model configure` with flags, when run non-interactively, then it updates non-secret provider configuration or reports missing required flags.
-- Given `daily-brief model login` for an OAuth provider, when credentials are needed, then it uses Pi provider OAuth helpers and writes credentials to the Model Credential Store.
-- Given model credentials exist, when `daily-brief model status` or `daily-brief model logout` runs, then status redacts secret values and logout removes only the selected credential reference.
-- Given Discord Delivery is configured or disabled, when delivery status or `delivery test` runs, then webhook secrets stay in the credential store and disabled delivery remains optional for generation.
+- Given `daily-brief setup` runs interactively, then it guides the user through provider and model selection without storing secrets in Source Registry.
+- Given `daily-brief setup` runs in a non-interactive context, then it fails with actionable file/environment-variable configuration guidance instead of writing partial defaults.
+- Given `daily-brief setup` configures an OAuth provider, then it may use Pi provider OAuth helpers and writes credentials to the Model Credential Store when the user chooses to log in.
+- Given model credentials exist, when setup or status output reports readiness, then secret values remain redacted and credentials are not deleted by rerunning setup.
+- Given Discord Delivery is configured or disabled through setup, then webhook secrets stay in the credential store and disabled delivery remains optional for generation.
 - Given Daily Brief is installed, when an external scheduler invokes `daily-brief run-once` outside a repository checkout, then the command reads user configuration from the User Configuration Directory.
 - Given an external scheduler invokes `daily-brief run-once`, when configuration is incomplete, then the command exits with an actionable non-interactive failure.
 

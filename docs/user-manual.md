@@ -31,9 +31,11 @@ Run setup after installing the package:
 
 If npm's global bin directory is in `PATH`, `daily-brief setup` is equivalent.
 
-Setup creates user configuration and generated-data directories, initializes the Source Registry from the packaged example, prepares credential storage, and reports readiness. Setup does not collect Sources, call an LLM, generate a Daily Brief, or send a delivery notification.
+Setup is an interactive wizard. It creates user configuration and generated-data directories, initializes the Source Registry from the packaged example, prepares credential storage, guides LLM Provider setup, offers optional Discord Delivery setup, and reports readiness. Setup does not collect Sources, call an LLM, generate a Daily Brief, or send a delivery notification.
 
 By default, configuration files live under `~/.daily-brief/`, and generated data lives under `~/.daily-brief/data/`.
+
+`daily-brief setup` requires interactive input. For CI or scripted setup, write `config.yaml`, `sources.yaml`, and `auth.json` directly under `DAILY_BRIEF_HOME`, and use `DAILY_BRIEF_DATA_HOME` when generated data should live elsewhere.
 
 ## Configure Sources
 
@@ -54,25 +56,20 @@ Use `sources validate` after editing the Source Registry.
 Agent Stages require an LLM Provider Configuration before real Daily Brief generation.
 
 ```bash
-daily-brief model configure
-daily-brief model status
-daily-brief model login
-daily-brief model logout
+daily-brief setup
 ```
 
-Credentials are stored in the Model Credential Store or environment variables. Do not put secrets in `sources.yaml` or committed project files.
+Use the setup wizard to choose the provider, model, credential reference, and optional login/API key storage path. Credentials are stored in the Model Credential Store or environment variables. Do not put secrets in `sources.yaml` or committed project files.
 
 ## Configure Delivery
 
 Discord Delivery is optional. Configure it when you want generated Daily Brief notifications pushed to Discord.
 
 ```bash
-daily-brief delivery configure --enabled true --webhook-url <url>
-daily-brief delivery status
-daily-brief delivery test
+daily-brief setup
 ```
 
-If Discord Delivery is disabled or no webhook is configured, generation can still run and will report skipped delivery explicitly.
+Setup asks whether to enable Discord Delivery. If Discord Delivery is disabled or no webhook is configured, generation can still run and will report skipped delivery explicitly.
 
 ## Run Daily Brief
 
@@ -82,16 +79,18 @@ For a full manual run:
 daily-brief run-once
 ```
 
-For separated operational steps:
+`run-once` performs collection, Agent Stage generation, archive writing, and delivery once. It prints human-readable progress while the run is active so you can see whether it is collecting Sources, waiting on Agent Stages, archiving, or delivering.
+
+The expected local cadence is a single daily run around the intended delivery time. Daily Brief does not include a built-in scheduler; use an external scheduler to invoke `daily-brief run-once`.
+
+## Version
+
+To report the installed CLI version:
 
 ```bash
-daily-brief collect
-daily-brief generate
-daily-brief deliver
-daily-brief status
+daily-brief version
+daily-brief --version
 ```
-
-The expected local cadence is collection at 06:00 and generation or delivery at 07:00 local time. Daily Brief does not include a built-in scheduler; use an external scheduler to invoke the CLI.
 
 ## Inspect Status
 
@@ -112,7 +111,7 @@ The installed CLI uses user-home paths by default:
 - `DAILY_BRIEF_DISCORD_TEMPLATE_PATH`: optional Discord notification template override.
 - `DISCORD_WEBHOOK_URL`: optional Discord webhook URL.
 
-Repository checkouts may use a local `.env`; installed usage should normally rely on user configuration and credential commands.
+Repository checkouts may use a local `.env`; installed usage should normally rely on setup, user configuration files, and environment-backed credential references.
 
 ## Upgrade
 
@@ -123,7 +122,7 @@ npm install -g @chenpengfei/daily-brief@latest
 "$(npm prefix -g)/bin/daily-brief" status
 ```
 
-Run `daily-brief setup` again when release notes or status output indicate that configuration needs to be refreshed. Setup preserves existing files unless an overwrite or force behavior is explicitly selected.
+Run `daily-brief setup` again when release notes or status output indicate that configuration needs to be refreshed. Setup preserves existing files by default and asks before replacing non-secret configuration. It does not accept a force-overwrite flag and never deletes generated data.
 
 ## Troubleshooting
 
@@ -149,14 +148,13 @@ daily-brief sources list
 If model access fails, run:
 
 ```bash
-daily-brief model status
+daily-brief setup
 ```
 
 If Discord delivery fails or is skipped, run:
 
 ```bash
-daily-brief delivery status
-daily-brief delivery test
+daily-brief setup
 ```
 
 If a run cannot honestly produce a Daily Brief, the CLI reports a Core Workflow Failure rather than archiving a false normal Daily Brief.

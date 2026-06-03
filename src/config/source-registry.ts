@@ -53,13 +53,40 @@ export async function setSourceEnabled(
 
 export function formatSourceRegistry(registry: SourceRegistry): string {
   if (registry.sources.length === 0) {
-    return "No Sources configured.";
+    return [
+      "No Sources configured.",
+      "",
+      "Add Sources by editing the Source Registry, then run:",
+      "  daily-brief sources edit",
+      "  daily-brief sources validate"
+    ].join("\n");
   }
 
-  return registry.sources
-    .map((source) => {
-      const state = source.enabled ? "enabled" : "disabled";
-      return `${state.padEnd(8)} ${source.id} ${source.platform}/${source.adapter} ${source.target}`;
-    })
-    .join("\n");
+  const rows = registry.sources.map((source) => ({
+    sourceId: source.id,
+    status: source.enabled ? "enabled" : "disabled",
+    platform: source.platform,
+    adapter: source.adapter,
+    target: source.target
+  }));
+  const widths = {
+    sourceId: Math.max("SOURCE ID".length, ...rows.map((row) => row.sourceId.length)),
+    status: Math.max("STATUS".length, ...rows.map((row) => row.status.length)),
+    platform: Math.max("PLATFORM".length, ...rows.map((row) => row.platform.length)),
+    adapter: Math.max("ADAPTER".length, ...rows.map((row) => row.adapter.length))
+  };
+  const firstSourceId = rows[0]?.sourceId ?? "<source-id>";
+  const lines = [
+    `${"SOURCE ID".padEnd(widths.sourceId)}  ${"STATUS".padEnd(widths.status)}  ${"PLATFORM".padEnd(widths.platform)}  ${"ADAPTER".padEnd(widths.adapter)}  TARGET`,
+    ...rows.map(
+      (row) =>
+        `${row.sourceId.padEnd(widths.sourceId)}  ${row.status.padEnd(widths.status)}  ${row.platform.padEnd(widths.platform)}  ${row.adapter.padEnd(widths.adapter)}  ${row.target}`
+    ),
+    "",
+    "Use SOURCE ID with:",
+    `  daily-brief sources enable ${firstSourceId}`,
+    `  daily-brief sources disable ${firstSourceId}`
+  ];
+
+  return lines.join("\n");
 }

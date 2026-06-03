@@ -193,12 +193,12 @@ The short Discord Delivery format for a generated Daily Brief: date, a few headl
 _Avoid_: Full daily brief, feedback UI, control command
 
 **Operational CLI**:
-The installed terminal entry point for manually running, inspecting, and configuring Daily Brief operations. The Operational CLI can run setup, manage Sources, configure LLM Providers, trigger Manual Runs, inspect status, and expose stable commands that external schedulers may invoke.
-_Avoid_: Chat product, long-running gateway, Discord control surface
+The installed terminal entry point for manually running, inspecting, and configuring Daily Brief operations. The Operational CLI exposes a small, stable, user-facing command surface; lower-level workflow phases may remain internal capabilities rather than direct user commands. It can run setup, manage Sources, trigger Manual Runs, inspect status, and expose stable commands that external schedulers may invoke.
+_Avoid_: Chat product, long-running gateway, Discord control surface, debug-only workflow step surface
 
 **Setup Wizard**:
-The interactive Operational CLI flow, exposed as `daily-brief setup`, that prepares an installed Daily Brief Agent for first use by creating user files and guiding required configuration choices. The Setup Wizard may configure Sources, LLM Provider access, and Delivery Channels, while scheduled workflow commands remain non-interactive.
-_Avoid_: Scheduled run, hidden auto-init, source discovery
+The interactive Operational CLI flow, exposed as `daily-brief setup`, that prepares an installed Daily Brief Agent for first use by creating user files and guiding required configuration choices. The Setup Wizard may configure Sources, LLM Provider access, and Delivery Channels, while scheduled workflow commands remain non-interactive. Re-running the Setup Wizard should use explicit prompts to preserve or update existing configuration rather than a force-overwrite flag. The Setup Wizard requires interactive user input and should not silently create partial default configuration in non-interactive environments.
+_Avoid_: Scheduled run, hidden auto-init, source discovery, non-interactive default bootstrap
 
 **User Manual**:
 The reader-facing product documentation for installing, setting up, running, upgrading, and troubleshooting the Daily Brief Agent. The User Manual lives separately from operations documentation, which may contain maintainer-oriented cadence, scheduler, and runtime details.

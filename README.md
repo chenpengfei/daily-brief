@@ -25,8 +25,7 @@ Daily Brief requires Node.js 22 or newer.
 daily-brief run-once
 daily-brief status
 daily-brief sources list
-daily-brief model status
-daily-brief delivery status
+daily-brief version
 ```
 
 For installation, setup, configuration, upgrade, and troubleshooting, see `docs/user-manual.md`.
