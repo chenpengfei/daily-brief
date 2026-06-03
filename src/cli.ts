@@ -38,6 +38,7 @@ import { getOperationalStatus } from "./workflow/index.js";
 export interface CliIo {
   stdout(line: string): void;
   stderr(line: string): void;
+  interactive?: boolean;
   prompt?(message: string): Promise<string>;
   fetchImpl?: typeof fetch;
 }
@@ -45,6 +46,7 @@ export interface CliIo {
 export type CliEnv = Partial<Record<string, string | undefined>>;
 
 const consoleIo: CliIo = {
+  interactive: Boolean(processStdin.isTTY && processStdout.isTTY),
   stdout(line: string) {
     console.log(line);
   },
@@ -52,6 +54,10 @@ const consoleIo: CliIo = {
     console.error(line);
   },
   async prompt(message: string) {
+    if (!processStdin.isTTY || !processStdout.isTTY) {
+      throw new Error(nonInteractiveSetupMessage());
+    }
+
     const reader = createInterface({ input: processStdin, output: processStdout });
 
     try {
@@ -302,7 +308,12 @@ async function handleSetupCommand(args: string[], io: CliIo, env: CliEnv): Promi
 
   if (await exists(paths.sourceRegistryPath)) {
     io.stdout(`Source Registry: ${paths.sourceRegistryPath}`);
-    io.stdout(formatSourceRegistry(await loadSourceRegistry(paths.sourceRegistryPath)));
+    try {
+      io.stdout(formatSourceRegistry(await loadSourceRegistry(paths.sourceRegistryPath)));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      io.stdout(`Source Registry invalid:\n${message}`);
+    }
     const reinitialize = await promptYesNo(io, "Reinitialize example Sources? Existing sources.yaml will be overwritten.", false);
     if (reinitialize) {
       await writeFile(paths.sourceRegistryPath, defaultSourceRegistryExample(), "utf8");
@@ -338,7 +349,7 @@ async function handleSetupCommand(args: string[], io: CliIo, env: CliEnv): Promi
 }
 
 function requireInteractiveSetup(io: CliIo): void {
-  if (!io.prompt) {
+  if (!io.prompt || io.interactive === false) {
     throw new Error(nonInteractiveSetupMessage());
   }
 }

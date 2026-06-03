@@ -67,7 +67,7 @@ export function readModelRuntimeConfig(
       model: "gpt-5.5",
       credentialRef: "openai-codex.default",
       ready: false,
-      issues: [`Model config not found: ${configPath}. Run daily-brief setup and daily-brief model configure/login first.`]
+      issues: [`Model config not found: ${configPath}. Run daily-brief setup or create config.yaml with model settings.`]
     };
   }
 

@@ -101,12 +101,16 @@ async function readDiscordTemplate(templatePath?: string): Promise<string> {
 }
 
 export function resolveConfiguredWebhookUrl(env: Partial<Record<string, string | undefined>> = process.env): string | undefined {
+  const paths = resolveDailyBriefPaths(env);
+  const config = readDeliveryConfig(paths.configPath);
+
+  if (config?.enabled === false) {
+    return undefined;
+  }
+
   if (env.DISCORD_WEBHOOK_URL) {
     return env.DISCORD_WEBHOOK_URL;
   }
-
-  const paths = resolveDailyBriefPaths(env);
-  const config = readDeliveryConfig(paths.configPath);
 
   if (!config?.enabled || !config.webhookRef) {
     return undefined;

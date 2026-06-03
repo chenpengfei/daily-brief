@@ -38,7 +38,7 @@ npm run cli -- status
 
 `sources list` confirms which Sources are enabled, including the default `github-trending-daily` Source. `run-once` performs collection, brief generation, archive writing, and Discord Delivery once. `status` reports operational health after the run.
 
-Discord Delivery uses the configured credential reference, or `DISCORD_WEBHOOK_URL` from the shell environment or local `.env`; `.env` is loaded automatically by the Operational CLI and does not need to be sourced manually.
+Discord Delivery uses the configured credential reference, or `DISCORD_WEBHOOK_URL` from the shell environment or local `.env`; `.env` is loaded automatically by the Operational CLI and does not need to be sourced manually. An explicit `delivery.enabled: false` in `config.yaml` disables delivery and takes precedence over `DISCORD_WEBHOOK_URL`.
 
 ## Runtime configuration
 

@@ -109,7 +109,7 @@ The installed CLI uses user-home paths by default:
 - `DAILY_BRIEF_HOME`: configuration directory, default `~/.daily-brief`.
 - `DAILY_BRIEF_DATA_HOME`: generated data directory, default `~/.daily-brief/data`.
 - `DAILY_BRIEF_DISCORD_TEMPLATE_PATH`: optional Discord notification template override.
-- `DISCORD_WEBHOOK_URL`: optional Discord webhook URL.
+- `DISCORD_WEBHOOK_URL`: optional Discord webhook URL. If `config.yaml` explicitly sets `delivery.enabled: false`, delivery stays disabled even when this environment variable is present.
 
 Repository checkouts may use a local `.env`; installed usage should normally rely on setup, user configuration files, and environment-backed credential references.
 

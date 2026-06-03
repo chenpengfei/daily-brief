@@ -116,6 +116,47 @@ describe("workflow CLI commands", () => {
     }
   });
 
+  it("does not use DISCORD_WEBHOOK_URL when config disables delivery", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-disabled-delivery-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFile(join(directory, "config.yaml"), "delivery:\n  enabled: false\n", "utf8");
+      await writeFixtureRegistry(directory, registryPath);
+
+      await runCli(["run-once", "--date", "2026-06-03"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory,
+        DISCORD_WEBHOOK_URL: "https://discord.example/should-not-send",
+        ...fauxRuntimeEnv()
+      });
+
+      expect(output.join("\n")).toContain("Discord delivery: skipped (DISCORD_WEBHOOK_URL is not configured)");
+      expect(output.join("\n")).not.toContain("fetch failed");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("points missing model configuration back to setup instead of removed model commands", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-missing-model-"));
+    const registryPath = join(directory, "sources.yaml");
+
+    try {
+      await writeFixtureRegistry(directory, registryPath);
+
+      await expect(
+        runCli(["run-once", "--date", "2026-06-03"], captureOutput([]), {
+          DAILY_BRIEF_HOME: directory,
+          DAILY_BRIEF_DATA_HOME: directory
+        })
+      ).rejects.toThrow(`Model config not found: ${join(directory, "config.yaml")}. Run daily-brief setup or create config.yaml with model settings.`);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("uses --date for workflow artifact paths", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-date-"));
     const registryPath = join(directory, "sources.yaml");

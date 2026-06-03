@@ -18,6 +18,33 @@ describe("setup command", () => {
     }
   });
 
+  it("fails before writing files when interactive input is unavailable", async () => {
+    const home = await mkdtemp(join(tmpdir(), "daily-brief-home-"));
+    const data = await mkdtemp(join(tmpdir(), "daily-brief-data-"));
+
+    try {
+      await expect(
+        runCli(
+          ["setup"],
+          {
+            ...captureOutput([]),
+            interactive: false,
+            async prompt() {
+              return "";
+            }
+          },
+          { DAILY_BRIEF_HOME: home, DAILY_BRIEF_DATA_HOME: data }
+        )
+      ).rejects.toThrow("daily-brief setup requires an interactive terminal");
+      await expect(readFile(join(home, "config.yaml"), "utf8")).rejects.toThrow("ENOENT");
+      await expect(readFile(join(home, "sources.yaml"), "utf8")).rejects.toThrow("ENOENT");
+      await expect(readFile(join(home, "auth.json"), "utf8")).rejects.toThrow("ENOENT");
+    } finally {
+      await rm(home, { recursive: true, force: true });
+      await rm(data, { recursive: true, force: true });
+    }
+  });
+
   it("prepares a fresh user home and data home interactively without running the workflow", async () => {
     const home = await mkdtemp(join(tmpdir(), "daily-brief-home-"));
     const data = await mkdtemp(join(tmpdir(), "daily-brief-data-"));
@@ -74,6 +101,26 @@ describe("setup command", () => {
       await expect(runCli(["setup", "--force"], promptingOutput([], []), { DAILY_BRIEF_HOME: home })).rejects.toThrow(
         "daily-brief setup does not accept flags"
       );
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("can reinitialize an invalid existing Source Registry", async () => {
+    const home = await mkdtemp(join(tmpdir(), "daily-brief-home-"));
+    const output: string[] = [];
+
+    try {
+      await writeFile(join(home, "sources.yaml"), "sources: nope\n", "utf8");
+
+      await runCli(["setup"], promptingOutput(output, ["", "yes", "", "", "", "no", "no"]), {
+        DAILY_BRIEF_HOME: home,
+        TZ: "Asia/Shanghai"
+      });
+
+      expect(output.join("\n")).toContain("Source Registry invalid:");
+      expect(output.join("\n")).toContain("Source Registry reinitialized from the packaged example.");
+      expect(await readFile(join(home, "sources.yaml"), "utf8")).toContain("github-trending-daily");
     } finally {
       await rm(home, { recursive: true, force: true });
     }
