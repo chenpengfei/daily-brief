@@ -31,48 +31,57 @@ describe("model runtime configuration", () => {
     }
   });
 
-  it("allows faux only through an explicit test-only env gate", () => {
-    expect(() => readModelRuntimeConfig({ DAILY_BRIEF_MODEL_PROVIDER: "faux" })).toThrow("only allowed");
-    expect(
-      readModelRuntimeConfig({
-        DAILY_BRIEF_ALLOW_FAUX_PROVIDER: "true",
-        DAILY_BRIEF_MODEL_PROVIDER: "faux",
-        DAILY_BRIEF_MODEL: "faux-daily-brief-renderer"
-      })
-    ).toEqual({
-      provider: "faux",
-      model: "faux-daily-brief-renderer",
-      ready: true,
-      issues: []
-    });
+  it("allows faux through an explicit test config file", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-faux-model-runtime-"));
+
+    try {
+      writeModelConfig(
+        {
+          provider: "faux",
+          model: "faux-daily-brief-renderer"
+        },
+        join(directory, "config.yaml")
+      );
+
+      expect(readModelRuntimeConfig({ DAILY_BRIEF_HOME: directory })).toEqual({
+        provider: "faux",
+        model: "faux-daily-brief-renderer",
+        ready: true,
+        issues: []
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
-  it("reads provider config from user config.yaml and resolves env credential refs without exposing secrets", async () => {
+  it("reads provider config from user config.yaml and resolves stored credential refs without exposing secrets", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-model-runtime-"));
+    const authPath = join(directory, "auth.json");
 
     try {
       writeModelConfig(
         {
           provider: "openai",
           model: "gpt-4.1-mini",
-          credentialRef: "env:OPENAI_API_KEY"
+          credentialRef: "openai.default"
         },
         join(directory, "config.yaml")
       );
+      putCredential("openai.default", { type: "api-key", provider: "openai", apiKey: "secret-value" }, authPath);
 
       const config = readModelRuntimeConfig(
-        { DAILY_BRIEF_HOME: directory, OPENAI_API_KEY: "secret-value" },
-        { configPath: join(directory, "config.yaml") }
+        { DAILY_BRIEF_HOME: directory },
+        { configPath: join(directory, "config.yaml"), authPath }
       );
 
       expect(config).toEqual({
         provider: "openai",
         model: "gpt-4.1-mini",
-        credentialRef: "env:OPENAI_API_KEY",
+        credentialRef: "openai.default",
         ready: true,
         issues: []
       });
-      expect(await resolveModelApiKey(config, { OPENAI_API_KEY: "secret-value" })).toBe("secret-value");
+      expect(await resolveModelApiKey(config, { DAILY_BRIEF_HOME: directory }, { authPath })).toBe("secret-value");
       expect(JSON.stringify(config)).not.toContain("secret-value");
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -87,7 +96,7 @@ describe("model runtime configuration", () => {
         {
           provider: "openai",
           model: "gpt-4.1-mini",
-          credentialRef: "env:OPENAI_API_KEY"
+          credentialRef: "openai.default"
         },
         join(directory, "config.yaml")
       );
@@ -95,9 +104,9 @@ describe("model runtime configuration", () => {
       expect(readModelRuntimeConfig({ DAILY_BRIEF_HOME: directory })).toEqual({
         provider: "openai",
         model: "gpt-4.1-mini",
-        credentialRef: "env:OPENAI_API_KEY",
+        credentialRef: "openai.default",
         ready: false,
-        issues: ["OPENAI_API_KEY is required for credentialRef env:OPENAI_API_KEY"]
+        issues: ["Credential not found: openai.default"]
       });
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -198,7 +207,7 @@ describe("model runtime configuration", () => {
             enabled: true,
             notes: "Example feed",
             model: "gpt-4.1-mini",
-            secret: "OPENAI_API_KEY"
+            secret: "provider-secret"
           }
         ]
       })
@@ -226,15 +235,19 @@ describe("model runtime configuration", () => {
         date,
         join(directory, "source-items")
       );
+      writeModelConfig(
+        {
+          provider: "faux",
+          model: "faux-daily-brief-renderer"
+        },
+        join(directory, "config.yaml")
+      );
+
       const result = await generateOnce({
         date,
         sourceItemRoot: join(directory, "source-items"),
         archiveRoot: join(directory, "briefs"),
-        modelRuntimeEnv: {
-          DAILY_BRIEF_ALLOW_FAUX_PROVIDER: "true",
-          DAILY_BRIEF_MODEL_PROVIDER: "faux",
-          DAILY_BRIEF_MODEL: "faux-daily-brief-renderer"
-        }
+        modelRuntimeEnv: { DAILY_BRIEF_HOME: directory }
       });
 
       expect(result.modelRuntimeConfig).toEqual({

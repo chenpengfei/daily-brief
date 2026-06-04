@@ -36,20 +36,16 @@ npm run cli -- run-once
 npm run cli -- status
 ```
 
-`sources list` confirms which Sources are enabled, including the default `github-trending-daily` Source. `run-once` performs collection, brief generation, archive writing, and Discord Delivery once. `status` reports operational health after the run.
+`sources list` confirms which Sources are enabled, including the default `github-trending-daily` Source. `run-once` performs collection, brief generation, archive writing, and Discord Delivery once. `status` reports setup readiness, today's run state, active paths, and the next suggested action.
 
-Discord Delivery uses the configured credential reference, or `DISCORD_WEBHOOK_URL` from the shell environment or local `.env`; `.env` is loaded automatically by the Operational CLI and does not need to be sourced manually. An explicit `delivery.enabled: false` in `config.yaml` disables delivery and takes precedence over `DISCORD_WEBHOOK_URL`.
+Discord Delivery uses the configured credential reference in `config.yaml` and `auth.json`. If Discord Delivery is disabled or its webhook credential is missing, delivery is skipped with an explicit reason.
 
 ## Runtime configuration
-
-When the Operational CLI starts, it loads local `.env` values from the repository root if the file exists. Existing shell environment variables take precedence over `.env` values. The `.env` file is ignored by Git; use `.env.example` as the non-secret template.
 
 Installed operational paths can be adjusted through environment variables:
 
 - `DAILY_BRIEF_HOME`: user config directory. Defaults to `~/.daily-brief`.
 - `DAILY_BRIEF_DATA_HOME`: generated data directory. Defaults to `~/.daily-brief/data`.
-- `DAILY_BRIEF_DISCORD_TEMPLATE_PATH`: optional Discord notification template override. Defaults to the packaged Discord notification template.
-- `DISCORD_WEBHOOK_URL`: Discord webhook URL. If unset, Discord Delivery is skipped with an explicit reason.
 
 Model/provider and delivery configuration should normally be managed with:
 
@@ -57,7 +53,7 @@ Model/provider and delivery configuration should normally be managed with:
 daily-brief setup
 ```
 
-Secrets live in `~/.daily-brief/auth.json` or environment variables, never in `sources.yaml` or committed project files. `daily-brief setup` requires interactive input; CI and scripted environments should create the user configuration files directly under `DAILY_BRIEF_HOME`. Installed CLI configuration does not accept the faux provider; faux is reserved for tests through an explicit test-only runtime gate.
+Secrets live in `~/.daily-brief/auth.json`, never in environment variables, `sources.yaml`, `config.yaml`, or committed project files. `daily-brief setup` requires interactive input; CI and scripted environments should create the user configuration files directly under `DAILY_BRIEF_HOME`. Faux provider coverage belongs in test configuration files, not runtime environment variables.
 
 `run-once` does not archive a normal Daily Brief when every enabled Source fails or when no Source Items exist for the requested date. It reports a Core Workflow Failure instead, because a false low-signal brief would hide collection failure.
 

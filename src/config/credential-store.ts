@@ -86,10 +86,6 @@ export function removeCredential(ref: string, path = resolveDailyBriefPaths().au
 }
 
 export function getCredential(ref: string, path = resolveDailyBriefPaths().authPath): CredentialRecord | undefined {
-  if (isEnvCredentialRef(ref)) {
-    return undefined;
-  }
-
   assertStoredCredentialRef(ref);
   return readCredentialStore(path).credentials[ref];
 }
@@ -107,21 +103,9 @@ export function redactCredentialStore(store: CredentialStore): Record<string, Re
   );
 }
 
-export function isEnvCredentialRef(ref: string): boolean {
-  return ref.startsWith("env:") && ref.slice("env:".length).trim().length > 0;
-}
-
-export function envNameFromCredentialRef(ref: string): string {
-  if (!isEnvCredentialRef(ref)) {
-    throw new Error(`Credential reference is not an env ref: ${ref}`);
-  }
-
-  return ref.slice("env:".length).trim();
-}
-
 export function assertStoredCredentialRef(ref: string): void {
-  if (isEnvCredentialRef(ref)) {
-    throw new Error(`Credential reference ${ref} is environment-backed and cannot be stored in auth.json`);
+  if (ref.startsWith("env:")) {
+    throw new Error(`Credential reference ${ref} is not supported; use a stored credential name in auth.json`);
   }
 
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(ref)) {

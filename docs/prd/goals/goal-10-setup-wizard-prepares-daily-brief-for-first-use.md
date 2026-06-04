@@ -21,7 +21,6 @@ https://github.com/chenpengfei/daily-brief/issues/15
 - Interactive `daily-brief setup` command.
 - Creation of `config.yaml`, `sources.yaml`, `auth.json`, and generated data root.
 - Initialization of `sources.yaml` from packaged or embedded example Sources.
-- Timezone detection, confirmation, and persistence.
 - Fixed first-version `brief.language: zh`.
 - Guidance to edit the user-home Source Registry YAML and validate it.
 - Guided LLM Provider, credential, and optional Discord Delivery configuration inside setup.
@@ -51,11 +50,6 @@ https://github.com/chenpengfei/daily-brief/issues/15
   When `daily-brief setup` runs,
   Then setup can initialize Sources, show the Source Registry edit/validate path, and guide LLM Provider configuration plus optional Discord Delivery configuration from one flow,
   Evidence: setup integration test with prompt-backed model and delivery choices.
-
-- Given setup reaches timezone configuration,
-  When the system timezone is detectable,
-  Then the detected timezone is shown or accepted and written to `config.yaml`,
-  Evidence: setup test with mocked timezone detection.
 
 - Given setup is rerun with existing files,
   When the user keeps existing values,

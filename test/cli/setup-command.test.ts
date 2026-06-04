@@ -51,14 +51,13 @@ describe("setup command", () => {
     const output: string[] = [];
 
     try {
-      await runCli(["setup"], promptingOutput(output, ["", "", "", "", "no", "no"]), {
+      await runCli(["setup"], promptingOutput(output, ["", "", "", "no", "no"]), {
         DAILY_BRIEF_HOME: home,
-        DAILY_BRIEF_DATA_HOME: data,
-        TZ: "Asia/Shanghai"
+        DAILY_BRIEF_DATA_HOME: data
       });
 
-      expect(await readFile(join(home, "config.yaml"), "utf8")).toContain("timezone: Asia/Shanghai");
       expect(await readFile(join(home, "config.yaml"), "utf8")).toContain("language: zh");
+      expect(await readFile(join(home, "config.yaml"), "utf8")).not.toContain("timezone:");
       expect(await readFile(join(home, "config.yaml"), "utf8")).toContain("provider: openai-codex");
       expect(await readFile(join(home, "sources.yaml"), "utf8")).toContain("github-trending-daily");
       expect(await readFile(join(home, "auth.json"), "utf8")).toContain("\"credentials\": {}");
@@ -67,7 +66,7 @@ describe("setup command", () => {
       expect(output.join("\n")).toContain("Ready to run:");
       expect(output).toContain("prompt:Login to openai-codex now? [Y/n]:");
       expect(output).toContain("prompt:Enable Discord delivery? [y/N]:");
-      expect(output.join("\n")).toContain("Credential name identifies where Daily Brief finds the model secret.");
+      expect(output.join("\n")).toContain("Credential name identifies where Daily Brief finds the model secret in auth.json.");
       expect(output).toContain("prompt:Model credential name (openai-codex.default):");
       await expect(readFile(join(data, "briefs", "2026", "05", "2026-05-28.md"), "utf8")).rejects.toThrow("ENOENT");
     } finally {
@@ -80,7 +79,7 @@ describe("setup command", () => {
     const home = await mkdtemp(join(tmpdir(), "daily-brief-home-"));
 
     try {
-      await writeFile(join(home, "config.yaml"), "timezone: UTC\ncustom: keep\n", "utf8");
+      await writeFile(join(home, "config.yaml"), "custom: keep\n", "utf8");
       await writeFile(
         join(home, "sources.yaml"),
         [
@@ -95,10 +94,7 @@ describe("setup command", () => {
         "utf8"
       );
 
-      await runCli(["setup"], promptingOutput([], ["", "no", "", "", "", "no", "no"]), {
-        DAILY_BRIEF_HOME: home,
-        TZ: "Asia/Shanghai"
-      });
+      await runCli(["setup"], promptingOutput([], ["no", "", "", "", "no", "no"]), { DAILY_BRIEF_HOME: home });
       expect(await readFile(join(home, "config.yaml"), "utf8")).toContain("custom: keep");
       expect(await readFile(join(home, "sources.yaml"), "utf8")).toContain("custom-source");
 
@@ -117,10 +113,7 @@ describe("setup command", () => {
     try {
       await writeFile(join(home, "sources.yaml"), "sources: nope\n", "utf8");
 
-      await runCli(["setup"], promptingOutput(output, ["", "yes", "", "", "", "no", "no"]), {
-        DAILY_BRIEF_HOME: home,
-        TZ: "Asia/Shanghai"
-      });
+      await runCli(["setup"], promptingOutput(output, ["yes", "", "", "", "no", "no"]), { DAILY_BRIEF_HOME: home });
 
       expect(output.join("\n")).toContain("Source Registry invalid:");
       expect(output.join("\n")).toContain("Source Registry reinitialized from the packaged example.");
@@ -138,7 +131,6 @@ describe("setup command", () => {
       await runCli(
         ["setup"],
         promptingOutput(output, [
-          "",
           "openai",
           "",
           "openai.work",
@@ -148,7 +140,7 @@ describe("setup command", () => {
           "",
           "https://discord.example/webhook"
         ]),
-        { DAILY_BRIEF_HOME: home, TZ: "Asia/Shanghai" }
+        { DAILY_BRIEF_HOME: home }
       );
 
       const config = await readFile(join(home, "config.yaml"), "utf8");
@@ -177,8 +169,8 @@ describe("setup command", () => {
     try {
       await runCli(
         ["setup"],
-        promptingOutput(output, ["", "openai", "", "openai.work", "y", "secret-value", "y", "", "https://discord.example/webhook"]),
-        { DAILY_BRIEF_HOME: home, TZ: "Asia/Shanghai" }
+        promptingOutput(output, ["openai", "", "openai.work", "y", "secret-value", "y", "", "https://discord.example/webhook"]),
+        { DAILY_BRIEF_HOME: home }
       );
 
       const config = await readFile(join(home, "config.yaml"), "utf8");

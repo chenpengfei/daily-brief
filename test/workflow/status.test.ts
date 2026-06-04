@@ -70,6 +70,7 @@ describe("workflow status", () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-status-"));
     const registryPath = join(directory, "sources.yaml");
     const archiveRoot = join(directory, "briefs");
+    const dataHome = directory;
     const archiveDirectory = join(archiveRoot, "2026", "05");
     const date = new Date("2026-05-28T07:00:00.000Z");
 
@@ -79,16 +80,47 @@ describe("workflow status", () => {
       });
 
       await writeFile(registryPath, "sources: []\n", "utf8");
-      await expect(getOperationalStatus({ date, sourceRegistryPath: registryPath, archiveRoot })).resolves.toMatchObject({
+      await writeFile(join(directory, "config.yaml"), ["model:", "  provider: faux", "  model: faux-daily-brief-renderer"].join("\n"), "utf8");
+      await mkdir(dataHome, { recursive: true });
+      await expect(
+        getOperationalStatus({
+          date,
+          env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: dataHome },
+          sourceRegistryPath: registryPath,
+          archiveRoot
+        })
+      ).resolves.toMatchObject({
         health: "partial-failure",
-        message: "No Daily Brief archived for 2026-05-28 yet."
+        message: "No Daily Brief archived for 2026-05-28 yet.",
+        nextAction: "daily-brief sources list, then daily-brief sources enable <source-id>",
+        today: {
+          briefArchive: {
+            state: "missing",
+            path: join(archiveRoot, "2026", "05", "2026-05-28.md")
+          }
+        }
       });
 
       await mkdir(archiveDirectory, { recursive: true });
       await writeFile(join(archiveDirectory, "2026-05-28.md"), "# Daily Brief - 2026-05-28\n", "utf8");
 
-      await expect(getOperationalStatus({ date, sourceRegistryPath: registryPath, archiveRoot })).resolves.toMatchObject({
-        health: "success"
+      await expect(
+        getOperationalStatus({
+          date,
+          env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: dataHome },
+          sourceRegistryPath: registryPath,
+          archiveRoot
+        })
+      ).resolves.toMatchObject({
+        health: "success",
+        setup: {
+          config: { state: "ok", path: join(directory, "config.yaml") },
+          model: { state: "ok", provider: "faux" },
+          delivery: { state: "disabled" }
+        },
+        today: {
+          briefArchive: { state: "ok", path: join(archiveDirectory, "2026-05-28.md") }
+        }
       });
     } finally {
       await rm(directory, { recursive: true, force: true });

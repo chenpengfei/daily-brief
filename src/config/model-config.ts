@@ -42,11 +42,6 @@ export function readModelConfig(path = resolveDailyBriefPaths().configPath): Dai
   return readDailyBriefConfig(path).model;
 }
 
-export function readConfiguredTimezone(path = resolveDailyBriefPaths().configPath): string | undefined {
-  const timezone = readDailyBriefConfig(path).timezone;
-  return typeof timezone === "string" && timezone.trim().length > 0 ? timezone.trim() : undefined;
-}
-
 export function writeModelConfig(config: DailyBriefModelConfig, path = resolveDailyBriefPaths().configPath): void {
   const current = readDailyBriefConfig(path);
   const next = {
@@ -115,6 +110,10 @@ export function parseModelConfig(value: Record<string, unknown>): DailyBriefMode
     throw new Error("config.model must not contain secrets; use auth.json via credentialRef");
   }
 
+  if (credentialRef?.startsWith("env:")) {
+    throw new Error("config.model.credentialRef must be a stored credential name, not env:NAME");
+  }
+
   if (provider === "openai-compatible" && !baseUrl) {
     throw new Error("config.model.baseUrl is required when provider is openai-compatible");
   }
@@ -142,11 +141,13 @@ function readProvider(value: unknown): ConfiguredModelProvider {
     return "openai-codex";
   }
 
-  if (provider === "faux") {
-    throw new Error("config.model.provider must not be faux; faux is only available through test-only runtime injection");
-  }
-
-  if (provider === "openai-codex" || provider === "openai" || provider === "deepseek" || provider === "openai-compatible") {
+  if (
+    provider === "faux" ||
+    provider === "openai-codex" ||
+    provider === "openai" ||
+    provider === "deepseek" ||
+    provider === "openai-compatible"
+  ) {
     return provider;
   }
 
