@@ -2,6 +2,27 @@
 
 All notable changes for Formal Releases are recorded here. GitHub Release notes should be derived from the matching version entry.
 
+## 0.1.2 - 2026-06-04
+
+Patch release for the simplified public CLI setup workflow.
+
+### User-visible Changes
+
+- Simplifies the public CLI around `setup`, `run-once`, `status`, `sources`, `version`, and help.
+- Reworks `daily-brief setup` into an interactive wizard that preserves existing files by default and guides model credential and optional Discord delivery configuration.
+- Adds human-readable `run-once` progress output and clearer Source listing/edit guidance.
+- Makes `delivery.enabled: false` take precedence over `DISCORD_WEBHOOK_URL`, preventing accidental Discord sends when delivery is disabled in config.
+
+### Installation and Upgrade Notes
+
+- Upgrade with `npm install -g @chenpengfei/daily-brief@latest`.
+- Run `daily-brief setup` again after upgrading to review the simplified setup flow.
+- Non-interactive setup now fails before writing configuration files; scripted environments should write `config.yaml`, `sources.yaml`, and `auth.json` directly.
+
+### Known Limitations
+
+- The simplified public CLI removes direct public `collect`, `generate`, `deliver`, `model`, and `delivery` command entry points. Use `setup`, `run-once`, `status`, and `sources` for normal installed usage.
+
 ## 0.1.1 - 2026-06-01
 
 Patch release for first-install command discovery.
