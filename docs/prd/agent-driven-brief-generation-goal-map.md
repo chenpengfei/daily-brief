@@ -26,7 +26,7 @@ Type: AFK
 
 Blocked by: Goal 9
 
-The CLI configures LLM Providers through Pi model/provider/API/OAuth abstractions, supports the recommended `openai-codex` / `gpt-5.5` path plus OpenAI, DeepSeek, and OpenAI-compatible providers, and stores credentials behind stable credential references in `auth.json`.
+The Setup Wizard configures LLM Providers through Pi model/provider/API/OAuth abstractions, supports the recommended `openai-codex` / `gpt-5.5` path plus OpenAI, DeepSeek, and OpenAI-compatible providers, and stores credentials behind stable credential references in `auth.json`.
 
 Draft: `docs/prd/goals/goal-11-model-provider-configuration-uses-pi-abstractions.md`
 
@@ -56,7 +56,7 @@ Type: AFK
 
 Blocked by: Goal 9, Goal 11
 
-The CLI configures optional Discord Delivery through `delivery configure/status/test`, stores webhooks in `auth.json` behind stable references, and reports readiness without leaking secrets.
+The Setup Wizard configures optional Discord Delivery, stores webhooks in `auth.json` behind stable references, and reports readiness without leaking secrets.
 
 Draft: `docs/prd/goals/goal-21-delivery-channel-configuration-uses-credential-store.md`
 
@@ -76,7 +76,7 @@ Type: AFK
 
 Blocked by: Goal 9, Goal 11, Goal 12, Goal 21
 
-`daily-brief setup` creates user configuration, initializes Sources from the packaged example, guides model and optional delivery configuration through focused modules, performs a readiness check, and can be rerun with simple skip-or-overwrite behavior without deleting generated data or revealing secrets.
+`daily-brief setup` creates user configuration, initializes Sources from the packaged example, guides model and optional delivery configuration in one interactive flow, performs a readiness check, and can be rerun with explicit preserve-or-update prompts without deleting credentials or generated data.
 
 Draft: `docs/prd/goals/goal-10-setup-wizard-prepares-daily-brief-for-first-use.md`
 
@@ -151,11 +151,11 @@ Draft: `docs/prd/goals/goal-20-npm-compatible-package-installs-the-daily-brief-c
 | Given a low-signal day, Agent Stages may archive a low-signal Daily Brief only after successfully deciding no strong Signals should be selected. | Goals 15, 16, 17, 18, 19 | Covered |
 | Given Daily Brief is installed, `daily-brief setup` creates user config, initializes Sources, guides model and optional delivery configuration, and ends with readiness output without running the workflow. | Goals 10, 11, 12, 21 | Covered |
 | Given a user manages Sources, `daily-brief sources list/edit/enable/disable/validate` operates on the user-home Source Registry and reports schema errors without reading repository-local personal Sources. | Goal 12 | Covered |
-| Given `daily-brief model configure` runs interactively, it guides provider/model selection without storing secrets in the Source Registry. | Goal 11 | Covered |
-| Given `daily-brief model configure` runs with flags, it updates non-secret provider configuration or reports missing required flags. | Goal 11 | Covered |
-| Given `daily-brief model login` runs for an OAuth provider, it uses Pi provider OAuth helpers and writes credentials to the Model Credential Store. | Goal 11 | Covered |
-| Given model credentials exist, `daily-brief model status` redacts secrets and `daily-brief model logout` removes only the selected credential reference. | Goal 11 | Covered |
-| Given Discord Delivery is configured or disabled, delivery status and `delivery test` keep webhook secrets in the credential store while delivery remains optional for generation. | Goal 21 | Covered |
+| Given `daily-brief setup` runs interactively, it guides provider/model selection without storing secrets in the Source Registry. | Goals 10, 11 | Covered |
+| Given `daily-brief setup` is unavailable because the environment is non-interactive, it reports file/environment-variable configuration guidance instead of writing partial defaults. | Goals 10, 19 | Covered |
+| Given setup configures an OAuth provider, it uses Pi provider OAuth helpers when the user chooses to log in and writes credentials to the Model Credential Store. | Goals 10, 11 | Covered |
+| Given model credentials exist, setup and status surfaces redact secrets and rerunning setup preserves credentials by default. | Goals 10, 11 | Covered |
+| Given Discord Delivery is configured or disabled, setup keeps webhook secrets in the credential store while delivery remains optional for generation. | Goals 10, 21 | Covered |
 | Given Daily Brief is installed, `daily-brief run-once` can run outside a repository checkout using the User Configuration Directory. | Goals 9, 19, 20 | Covered |
 | Given workflow configuration is incomplete, non-interactive workflow commands exit with actionable setup/configuration instructions. | Goals 10, 19 | Covered |
 
@@ -166,7 +166,7 @@ Draft: `docs/prd/goals/goal-20-npm-compatible-package-installs-the-daily-brief-c
 | Installed CLI runs without repository checkout | Goals 9, 20 | Covered |
 | User configuration lives outside repository | Goals 9, 10, 12 | Covered |
 | Generated data lives under `DAILY_BRIEF_DATA_HOME` root | Goals 9, 13, 18, 19 | Covered |
-| Setup Wizard completes first-use configuration through focused configuration modules with simple skip-or-overwrite reconfiguration | Goal 10 | Covered |
+| Setup Wizard completes first-use configuration with explicit preserve-or-update reconfiguration and no force-overwrite flag | Goal 10, GitHub #34 | Covered |
 | LLM Provider abstraction reuses Pi | Goal 11 | Covered |
 | Multiple credentials and active credential refs | Goal 11 | Covered |
 | Delivery Channel configuration uses credential refs | Goal 21 | Covered |
@@ -178,7 +178,7 @@ Draft: `docs/prd/goals/goal-20-npm-compatible-package-installs-the-daily-brief-c
 | Executive Summary generated by Agent | Goal 16 | Covered |
 | Source-grounding audit and Analysis Failure | Goal 17, Goal 19 | Covered |
 | Deterministic Source Coverage and Sources sections | Goal 18 | Covered |
-| Optional minimal Discord webhook configuration and test | Goal 21 | Covered |
+| Optional minimal Discord webhook configuration | Goal 21 | Covered |
 | Non-interactive scheduler-friendly workflow commands | Goal 19 | Covered |
 | Package/distribution via npm-compatible channels | Goal 20 | Covered |
 | Named profiles | N/A | Out of Scope |
@@ -202,7 +202,7 @@ Draft: `docs/prd/goals/goal-20-npm-compatible-package-installs-the-daily-brief-c
 ## Known Dependencies
 
 - Goal 9 creates the installed path and configuration/data home foundation needed by setup, sources, artifacts, and packaging.
-- Goal 10 depends on Goals 9, 11, 12, and 21 because setup writes user files into the new home layout and must integrate the focused model, source, and delivery configuration modules.
+- Goal 10 depends on Goals 9, 11, 12, and 21 because setup writes user files into the new home layout and must integrate model, source, and delivery configuration in one guided flow.
 - Goal 11 depends on Goal 9 because provider credentials and config live in user home.
 - Goal 12 depends on Goal 9 because Source Registry defaults move into user home.
 - Goal 13 depends on Goals 9 and 11 because artifacts live in the data root and stage execution needs model configuration.

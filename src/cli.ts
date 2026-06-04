@@ -1,29 +1,28 @@
 #!/usr/bin/env node
 import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { stdin as processStdin, stdout as processStdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { stringify } from "yaml";
 import {
-  deliverOnce,
-  generateOnce,
   loginModelCredential,
-  logoutModelCredential,
   readModelRuntimeConfig,
   runOnce,
-  statusModelCredentials,
   toApiKeyCredential,
   type ModelProvider
 } from "./agent/index.js";
-import { collectSources } from "./collection/index.js";
 import { resolveConfiguredWebhookUrl } from "./discord/index.js";
 import {
   defaultModelConfig,
   dateFromDateKey,
   formatDateKey,
   formatSourceRegistry,
+  isEnvCredentialRef,
   loadSourceRegistry,
   putCredential,
   readDeliveryConfig,
+  readDailyBriefConfig,
   readConfiguredTimezone,
   getCredential,
   resolveDailyBriefPaths,
@@ -39,6 +38,7 @@ import { getOperationalStatus } from "./workflow/index.js";
 export interface CliIo {
   stdout(line: string): void;
   stderr(line: string): void;
+  interactive?: boolean;
   prompt?(message: string): Promise<string>;
   fetchImpl?: typeof fetch;
 }
@@ -46,6 +46,7 @@ export interface CliIo {
 export type CliEnv = Partial<Record<string, string | undefined>>;
 
 const consoleIo: CliIo = {
+  interactive: Boolean(processStdin.isTTY && processStdout.isTTY),
   stdout(line: string) {
     console.log(line);
   },
@@ -53,7 +54,11 @@ const consoleIo: CliIo = {
     console.error(line);
   },
   async prompt(message: string) {
-    const reader = createInterface({ input: processStdin, output: processStdout });
+    if (!processStdin.isTTY || !processStdout.isTTY) {
+      throw new Error(nonInteractiveSetupMessage());
+    }
+
+    const reader = createInterface({ input: processStdin, output: processStdout, terminal: false });
 
     try {
       return await reader.question(`${message} `);
@@ -76,51 +81,38 @@ export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv 
     return;
   }
 
+  if (command === "version" || command === "--version" || command === "-v") {
+    io.stdout(await readPackageVersion());
+    return;
+  }
+
   if (command === "run-once") {
     await assertWorkflowConfigured(options.sourceRegistryPath);
-    const result = await runOnce(options);
+    io.stdout("Daily Brief run started");
+    io.stdout(`Date: ${options.dateKey}`);
+    io.stdout(`Home: ${resolveDailyBriefPaths(env).home}`);
+    io.stdout("");
+    const result = await runOnce({
+      ...options,
+      onProgress(line) {
+        io.stdout(line);
+      }
+    });
     if (result.coreFailure) {
       throw new Error(`Core Workflow Failure: ${result.coreFailure.kind}\n${result.coreFailure.message}`);
     }
+    io.stdout("");
     io.stdout(`Daily Brief archived: ${result.archivePath}`);
     io.stdout(`Sources read: ${result.sourceCount}`);
     io.stdout(`Source Items read: ${result.sourceItemCount}`);
-    io.stdout(`Discord delivery: ${result.delivery.status}`);
-    io.stdout(`Pi events: ${result.piEvents.join(", ")}`);
+    io.stdout(`Agent stages completed: ${countAgentStageEvents(result.piEvents)}/5`);
+    io.stdout(`Discord delivery: ${formatDeliveryStatus(result.delivery)}`);
+    io.stdout("5/5 Run completed");
     return;
   }
 
   if (command === "setup") {
     await handleSetupCommand(args.slice(1), io, env);
-    return;
-  }
-
-  if (command === "collect") {
-    await assertWorkflowConfigured(options.sourceRegistryPath);
-    const result = await collectSources(options);
-    io.stdout(`Source Item Store: ${result.storePath || "(no items written)"}`);
-
-    for (const source of result.sources) {
-      io.stdout(
-        `${source.status.padEnd(7)} ${source.sourceId} items=${source.itemCount} written=${source.writtenCount} duplicates=${source.skippedDuplicateCount}${
-          source.reason ? ` reason=${source.reason}` : ""
-        }`
-      );
-    }
-
-    return;
-  }
-
-  if (command === "generate") {
-    const result = await generateOnce(options);
-    io.stdout(`Daily Brief archived: ${result.archivePath}`);
-    io.stdout(`Source Items read: ${result.sourceItemCount}`);
-    return;
-  }
-
-  if (command === "deliver") {
-    const result = await deliverOnce(options);
-    io.stdout(`Discord delivery: ${result.status}${"reason" in result ? ` (${result.reason})` : ""}`);
     return;
   }
 
@@ -140,17 +132,42 @@ export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv 
     return;
   }
 
-  if (command === "model") {
-    await handleModelCommand(args.slice(1), io, env);
-    return;
-  }
-
-  if (command === "delivery") {
-    await handleDeliveryCommand(args.slice(1), io, env);
-    return;
-  }
-
   throw new Error(`Unknown command: ${command}`);
+}
+
+async function readPackageVersion(): Promise<string> {
+  let directory = dirname(fileURLToPath(import.meta.url));
+
+  for (let index = 0; index < 8; index += 1) {
+    const path = join(directory, "package.json");
+
+    try {
+      const packageJson = JSON.parse(await readFile(path, "utf8")) as unknown;
+      if (isRecord(packageJson) && typeof packageJson.version === "string") {
+        return `daily-brief ${packageJson.version}`;
+      }
+    } catch (error) {
+      if (!(isNodeError(error) && error.code === "ENOENT")) {
+        throw error;
+      }
+    }
+
+    const parent = dirname(directory);
+    if (parent === directory) {
+      break;
+    }
+    directory = parent;
+  }
+
+  return "daily-brief unknown";
+}
+
+function countAgentStageEvents(events: string[]): number {
+  return events.length > 0 ? 5 : 0;
+}
+
+function formatDeliveryStatus(delivery: { status: string; reason?: string }): string {
+  return `${delivery.status}${delivery.reason ? ` (${delivery.reason})` : ""}`;
 }
 
 function readWorkflowDateOption(flags: Record<string, string | undefined>, env: CliEnv): { date: Date; dateKey: string } {
@@ -188,8 +205,15 @@ async function handleSourcesCommand(
 
   if (subcommand === "edit") {
     const path = sourceRegistryPath ?? resolveDailyBriefPaths().sourceRegistryPath;
-    io.stdout(`Source Registry: ${path}`);
-    io.stdout("Edit this YAML file, then run: daily-brief sources validate");
+    io.stdout("Source Registry:");
+    io.stdout(`  ${path}`);
+    io.stdout("");
+    io.stdout("Edit this YAML file to add, remove, or update Sources.");
+    io.stdout("Use the id field as SOURCE ID for enable/disable commands.");
+    io.stdout("");
+    io.stdout("After editing:");
+    io.stdout("  daily-brief sources validate");
+    io.stdout("  daily-brief sources list");
     return;
   }
 
@@ -209,11 +233,22 @@ async function handleSourcesCommand(
 
   if (subcommand === "enable" || subcommand === "disable") {
     if (!value) {
-      throw new Error(`sources ${subcommand} requires a Source id`);
+      throw new Error(
+        `sources ${subcommand} requires a SOURCE ID. Run daily-brief sources list to see available SOURCE ID values.`
+      );
     }
 
     const enabled = subcommand === "enable";
-    await setSourceEnabled(value, enabled, sourceRegistryPath);
+    try {
+      await setSourceEnabled(value, enabled, sourceRegistryPath);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message === `Source not found: ${value}`) {
+        throw new Error(`Source not found: ${value}. Run daily-brief sources list to see available SOURCE ID values.`);
+      }
+
+      throw error;
+    }
     io.stdout(`${enabled ? "Enabled" : "Disabled"} Source: ${value}`);
     return;
   }
@@ -227,141 +262,278 @@ function printHelp(io: CliIo): void {
       "Daily Brief Operational CLI",
       "",
       "Usage:",
-      "  daily-brief setup [--force]",
-      "  daily-brief run-once",
-      "  daily-brief collect",
-      "  daily-brief generate",
-      "  daily-brief deliver",
+      "  daily-brief setup",
+      "  daily-brief run-once [--date YYYY-MM-DD]",
       "  daily-brief status",
-      "  daily-brief model configure [--provider <provider> --model <model> --credential-ref <ref>]",
-      "  daily-brief model login [--provider openai-codex --credential-ref <ref>]",
-      "  daily-brief model logout [--credential-ref <ref>]",
-      "  daily-brief model status",
-      "  daily-brief delivery configure --enabled true|false [--webhook-ref <ref> --webhook-url <url>]",
-      "  daily-brief delivery status",
-      "  daily-brief delivery test",
       "  daily-brief sources list",
       "  daily-brief sources edit",
       "  daily-brief sources validate",
       "  daily-brief sources enable <source-id>",
-      "  daily-brief sources disable <source-id>"
+      "  daily-brief sources disable <source-id>",
+      "  daily-brief version"
     ].join("\n")
   );
 }
 
 async function handleSetupCommand(args: string[], io: CliIo, env: CliEnv): Promise<void> {
   const flags = parseFlags(args);
-  const force = flags.force === "true";
+
+  if (Object.keys(flags).length > 0 || args.some((arg) => !arg.startsWith("--"))) {
+    throw new Error("daily-brief setup does not accept flags. Re-run setup and choose what to preserve or update interactively.");
+  }
+
+  requireInteractiveSetup(io);
   const paths = resolveDailyBriefPaths(env);
-  const timezone = env.TZ?.trim() || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const existingConfig = readDailyBriefConfig(paths.configPath);
+  const timezone = await promptWithDefault(
+    io,
+    "Timezone",
+    readConfiguredTimezone(paths.configPath) ?? env.TZ?.trim() ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC"
+  );
 
   await mkdir(paths.home, { recursive: true });
   await mkdir(paths.sourceItemRoot, { recursive: true });
   await mkdir(paths.agentRunRoot, { recursive: true });
   await mkdir(paths.briefArchiveRoot, { recursive: true });
-  await writeIfNeeded(
-    paths.configPath,
-    [
-      `timezone: ${timezone}`,
-      "brief:",
-      "  language: zh",
-      "  maxSignals: 5",
-      "model:",
-      "  provider: openai-codex",
-      "  model: gpt-5.5",
-      "  credentialRef: openai-codex.default",
-      "delivery:",
-      "  enabled: false",
-      ""
-    ].join("\n"),
-    force
-  );
-  await writeIfNeeded(paths.sourceRegistryPath, defaultSourceRegistryExample(), force);
 
-  if (force || !(await exists(paths.authPath))) {
+  await writeSetupBaseConfig(paths.configPath, {
+    ...existingConfig,
+    timezone,
+    brief: normalizeBriefConfig(existingConfig.brief)
+  });
+
+  if (!(await exists(paths.authPath))) {
     writeCredentialStore({ credentials: {} }, paths.authPath);
   }
 
+  if (await exists(paths.sourceRegistryPath)) {
+    io.stdout(`Source Registry: ${paths.sourceRegistryPath}`);
+    try {
+      io.stdout(formatSourceRegistry(await loadSourceRegistry(paths.sourceRegistryPath)));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      io.stdout(`Source Registry invalid:\n${message}`);
+    }
+    const reinitialize = await promptYesNo(io, "Reinitialize example Sources? Existing sources.yaml will be overwritten.", false);
+    if (reinitialize) {
+      await writeFile(paths.sourceRegistryPath, defaultSourceRegistryExample(), "utf8");
+      io.stdout("Source Registry reinitialized from the packaged example.");
+    } else {
+      io.stdout("Source Registry preserved.");
+    }
+  } else {
+    await writeFile(paths.sourceRegistryPath, defaultSourceRegistryExample(), "utf8");
+    io.stdout(`Source Registry initialized: ${paths.sourceRegistryPath}`);
+    io.stdout(formatSourceRegistry(await loadSourceRegistry(paths.sourceRegistryPath)));
+  }
+
+  io.stdout("To edit Sources:");
+  io.stdout("  daily-brief sources edit");
+  io.stdout("  daily-brief sources validate");
+  io.stdout("  daily-brief sources list");
+
+  await configureModelThroughSetup(io, env);
+  await configureDeliveryThroughSetup(io, env);
+
+  const readiness = readModelRuntimeConfig(env);
+  const delivery = readDeliveryConfig(paths.configPath);
   io.stdout(`Daily Brief home: ${paths.home}`);
   io.stdout(`Daily Brief data: ${paths.dataHome}`);
   io.stdout(`Timezone: ${timezone}`);
   io.stdout(`Source Registry: ${paths.sourceRegistryPath}`);
-  io.stdout("Next: daily-brief sources validate");
-  io.stdout("Next: daily-brief model configure");
-  io.stdout("Optional: daily-brief delivery configure --enabled true --webhook-url <url>");
-  io.stdout("Readiness: config files present, Source Registry initialized, data directories writable, delivery disabled");
+  io.stdout(`Model: ${readiness.provider}/${readiness.model}`);
+  io.stdout(`Model credential: ${readiness.ready ? "configured" : "missing"}`);
+  io.stdout(`Discord delivery: ${delivery?.enabled ? "enabled" : "disabled"}`);
+  io.stdout("Ready to run:");
+  io.stdout("  daily-brief run-once");
 }
 
-async function handleDeliveryCommand(args: string[], io: CliIo, env: CliEnv): Promise<void> {
-  const [subcommand, ...rest] = args;
-  const flags = parseFlags(rest);
+function requireInteractiveSetup(io: CliIo): void {
+  if (!io.prompt || io.interactive === false) {
+    throw new Error(nonInteractiveSetupMessage());
+  }
+}
+
+function nonInteractiveSetupMessage(): string {
+  return [
+    "daily-brief setup requires an interactive terminal.",
+    "For CI or scripted setup, create ~/.daily-brief/config.yaml, ~/.daily-brief/sources.yaml, and ~/.daily-brief/auth.json directly.",
+    "Use DAILY_BRIEF_HOME to choose a configuration root and DAILY_BRIEF_DATA_HOME to choose a generated-data root.",
+    "Run daily-brief sources validate after writing sources.yaml."
+  ].join("\n");
+}
+
+async function writeSetupBaseConfig(path: string, config: Record<string, unknown>): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, stringify(config), "utf8");
+}
+
+function normalizeBriefConfig(value: unknown): Record<string, unknown> {
+  const current = isRecord(value) ? value : {};
+  return {
+    ...current,
+    language: "zh",
+    maxSignals: typeof current.maxSignals === "number" ? current.maxSignals : 5
+  };
+}
+
+async function configureModelThroughSetup(io: CliIo, env: CliEnv): Promise<void> {
   const paths = resolveDailyBriefPaths(env);
+  const current = readDailyBriefConfig(paths.configPath).model ?? defaultModelConfig();
+  const provider = readProviderFlag(
+    await promptWithDefault(io, "LLM Provider (openai-codex/openai/deepseek/openai-compatible)", current.provider)
+  );
+  const model = await promptWithDefault(io, "Model", current.provider === provider ? current.model : defaultModelForProvider(provider));
+  io.stdout(
+    "Credential name identifies where Daily Brief finds the model secret. Use the default unless you manage multiple credentials; env:NAME reads an environment variable."
+  );
+  const credentialRef = await promptWithDefault(
+    io,
+    "Model credential name",
+    current.provider === provider ? current.credentialRef ?? defaultCredentialRef(provider) ?? "" : defaultCredentialRef(provider) ?? ""
+  );
+  const baseUrl =
+    provider === "openai-compatible"
+      ? await promptWithDefault(io, "Base URL", current.provider === provider ? current.baseUrl ?? "" : "")
+      : undefined;
+  const config: DailyBriefModelConfig = {
+    provider,
+    model,
+    ...(credentialRef ? { credentialRef } : {}),
+    ...(baseUrl ? { baseUrl } : {})
+  };
 
-  if (subcommand === "configure") {
-    const enabled = flags.enabled === "true" || flags.enabled === "yes";
-    const webhookRef = flags["webhook-ref"] ?? "discord.default";
-    writeDeliveryConfig({ enabled, ...(enabled ? { webhookRef } : {}) }, paths.configPath);
+  writeModelConfig(config, paths.configPath);
+  io.stdout(`Model configured: ${provider}/${model}`);
+  if (credentialRef) {
+    io.stdout(`Model credential name: ${credentialRef}`);
+  }
 
-    if (enabled && flags["webhook-url"]) {
-      putCredential(webhookRef, { type: "webhook", provider: "discord", webhookUrl: flags["webhook-url"] }, paths.authPath);
-    }
+  await maybeConfigureModelCredential({ provider, credentialRef, io, env });
+}
 
-    io.stdout(`Discord delivery: ${enabled ? "enabled" : "disabled"}`);
-    if (enabled) io.stdout(`Webhook Ref: ${webhookRef}`);
+async function maybeConfigureModelCredential(input: {
+  provider: ModelProvider;
+  credentialRef: string;
+  io: CliIo;
+  env: CliEnv;
+}): Promise<void> {
+  if (!input.credentialRef) {
     return;
   }
 
-  if (subcommand === "status") {
-    const config = readDeliveryConfig(paths.configPath);
+  const paths = resolveDailyBriefPaths(input.env);
 
-    if (!config?.enabled) {
-      io.stdout("Discord delivery: disabled");
+  if (input.provider === "openai-codex") {
+    const credential = getCredential(input.credentialRef, paths.authPath);
+    if (credential) {
+      input.io.stdout("Model credential: configured");
       return;
     }
 
-    const credential = config.webhookRef ? getDeliveryWebhookCredential(config.webhookRef, paths.authPath) : undefined;
-    io.stdout("Discord delivery: enabled");
-    io.stdout(`Webhook Ref: ${config.webhookRef ?? "(missing)"}`);
-    io.stdout(`Webhook: ${credential ? "<redacted>" : "(missing)"}`);
+    if (await promptYesNo(input.io, "Login to openai-codex now?", true)) {
+      await loginModelCredential({
+        provider: input.provider,
+        credentialRef: input.credentialRef,
+        io: input.io,
+        env: input.env
+      });
+      input.io.stdout(`Logged in credential: ${input.credentialRef}`);
+    } else {
+      input.io.stdout("Model credential: missing");
+    }
     return;
   }
 
-  if (subcommand === "test") {
-    const config = readDeliveryConfig(paths.configPath);
-    const credential = config?.webhookRef ? getDeliveryWebhookCredential(config.webhookRef, paths.authPath) : undefined;
-
-    if (!config?.enabled || !credential) {
-      throw new Error("delivery test requires enabled Discord delivery with a webhook credential");
+  if (isEnvCredentialRef(input.credentialRef)) {
+    const hasEnvValue = Boolean(input.env[input.credentialRef.slice("env:".length)]?.trim());
+    if (hasEnvValue) {
+      input.io.stdout("Model credential: configured from environment");
+      return;
     }
 
-    const response = await (io.fetchImpl ?? fetch)(credential.webhookUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ content: "Daily Brief delivery test" })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Discord delivery test failed with status ${response.status}`);
+    if (!(await promptYesNo(input.io, "Store API key in credential store instead of using the environment?", false))) {
+      input.io.stdout("Model credential: missing until the environment variable is set");
+      return;
     }
 
-    io.stdout("Discord delivery test: sent");
+    const storedRef = await promptWithDefault(input.io, "Stored credential name", `${input.provider}.default`);
+    const apiKey = await promptWithDefault(input.io, "API key input may be visible in this terminal. API key", "");
+    if (apiKey) {
+      putCredential(storedRef, toApiKeyCredential(input.provider, apiKey), paths.authPath);
+      writeModelConfig({ ...readDailyBriefConfig(paths.configPath).model!, credentialRef: storedRef }, paths.configPath);
+      input.io.stdout(`Stored credential: ${storedRef}`);
+    }
     return;
   }
 
-  throw new Error(`Unknown delivery command: ${subcommand ?? "(missing)"}`);
-}
-
-function getDeliveryWebhookCredential(ref: string, authPath: string): { webhookUrl: string } | undefined {
-  const credential = getCredential(ref, authPath);
-  return credential?.type === "webhook" && credential.provider === "discord" ? credential : undefined;
-}
-
-async function writeIfNeeded(path: string, contents: string, force: boolean): Promise<void> {
-  if (!force && (await exists(path))) {
+  if (getCredential(input.credentialRef, paths.authPath)) {
+    input.io.stdout("Model credential: configured");
     return;
   }
 
-  await writeFile(path, contents, "utf8");
+  if (await promptYesNo(input.io, "Store API key in credential store? API key input may be visible in this terminal.", false)) {
+    const apiKey = await promptWithDefault(input.io, "API key", "");
+    if (apiKey) {
+      putCredential(input.credentialRef, toApiKeyCredential(input.provider, apiKey), paths.authPath);
+      input.io.stdout(`Stored credential: ${input.credentialRef}`);
+    }
+  } else {
+    input.io.stdout("Model credential: missing");
+  }
+}
+
+async function configureDeliveryThroughSetup(io: CliIo, env: CliEnv): Promise<void> {
+  const paths = resolveDailyBriefPaths(env);
+  const current = readDeliveryConfig(paths.configPath);
+  const enabled = await promptYesNo(io, "Enable Discord delivery?", current?.enabled ?? false);
+
+  if (!enabled) {
+    writeDeliveryConfig({ enabled: false }, paths.configPath);
+    io.stdout("Discord delivery: disabled");
+    return;
+  }
+
+  const webhookRef = await promptWithDefault(io, "Discord webhook credential name", current?.webhookRef ?? "discord.default");
+  writeDeliveryConfig({ enabled: true, webhookRef }, paths.configPath);
+  const credential = getCredential(webhookRef, paths.authPath);
+
+  if (credential) {
+    io.stdout("Discord webhook: configured");
+    if (!(await promptYesNo(io, "Replace Discord webhook URL?", false))) {
+      return;
+    }
+  }
+
+  const webhookUrl = await promptWithDefault(io, "Discord webhook URL", "");
+  if (webhookUrl) {
+    putCredential(webhookRef, { type: "webhook", provider: "discord", webhookUrl }, paths.authPath);
+    io.stdout(`Discord webhook stored: ${webhookRef}`);
+  } else {
+    io.stdout("Discord webhook: missing");
+  }
+}
+
+async function promptYesNo(io: CliIo, label: string, defaultValue: boolean): Promise<boolean> {
+  if (!io.prompt) {
+    throw new Error(nonInteractiveSetupMessage());
+  }
+
+  const suffix = defaultValue ? "[Y/n]" : "[y/N]";
+  const answer = (await io.prompt(`${label} ${suffix}:`)).trim().toLowerCase();
+  if (!answer) {
+    return defaultValue;
+  }
+
+  if (answer === "y" || answer === "yes" || answer === "true") {
+    return true;
+  }
+
+  if (answer === "n" || answer === "no" || answer === "false") {
+    return false;
+  }
+
+  throw new Error(`${label} requires y/yes or n/no`);
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -393,92 +565,6 @@ function defaultSourceRegistryExample(): string {
     "    notes: Site-wide daily GitHub Trending; Brief generation filters for Agent Architecture and AI Coding signals",
     ""
   ].join("\n");
-}
-
-async function handleModelCommand(args: string[], io: CliIo, env: CliEnv): Promise<void> {
-  const [subcommand, ...rest] = args;
-  const flags = parseFlags(rest);
-
-  if (subcommand === "configure") {
-    await configureModel(flags, io, env);
-    return;
-  }
-
-  if (subcommand === "status") {
-    const config = readModelRuntimeConfig(env);
-    io.stdout(`Provider: ${config.provider}`);
-    io.stdout(`Model: ${config.model}`);
-    io.stdout(`Credential Ref: ${config.credentialRef ?? "(none)"}`);
-    io.stdout(`Ready: ${config.ready ? "yes" : "no"}`);
-
-    for (const issue of config.issues) {
-      io.stdout(`- ${issue}`);
-    }
-
-    for (const credential of statusModelCredentials(env)) {
-      io.stdout(`Credential: ${credential.ref} provider=${credential.provider} type=${credential.type} secret=${credential.secret}`);
-    }
-
-    return;
-  }
-
-  if (subcommand === "login") {
-    const config = readModelRuntimeConfig(env);
-    const provider = readProviderFlag(flags.provider ?? config.provider ?? defaultModelConfig().provider);
-    const credentialRef = flags["credential-ref"] ?? config.credentialRef ?? defaultCredentialRef(provider);
-
-    if (!credentialRef) {
-      throw new Error("model login requires --credential-ref");
-    }
-
-    await loginModelCredential({ provider, credentialRef, io, env });
-    io.stdout(`Logged in credential: ${credentialRef}`);
-    return;
-  }
-
-  if (subcommand === "logout") {
-    const config = readModelRuntimeConfig(env);
-    const credentialRef = flags["credential-ref"] ?? rest[0] ?? config.credentialRef;
-
-    if (!credentialRef) {
-      throw new Error("model logout requires --credential-ref");
-    }
-
-    logoutModelCredential(credentialRef, env);
-    io.stdout(`Logged out credential: ${credentialRef}`);
-    return;
-  }
-
-  throw new Error(`Unknown model command: ${subcommand ?? "(missing)"}`);
-}
-
-async function configureModel(flags: Record<string, string | undefined>, io: CliIo, env: CliEnv): Promise<void> {
-  const interactive = Object.keys(flags).length === 0;
-  const provider = readProviderFlag(
-    flags.provider ??
-      (interactive ? await promptWithDefault(io, "Provider", defaultModelConfig().provider) : missingFlag("provider"))
-  );
-  const model = flags.model ?? (interactive ? await promptWithDefault(io, "Model", defaultModelForProvider(provider)) : missingFlag("model"));
-  const credentialRef =
-    flags["credential-ref"] ??
-    (interactive ? await promptWithDefault(io, "Credential ref", defaultCredentialRef(provider) ?? "") : missingFlag("credential-ref"));
-  const baseUrl = flags["base-url"] ?? (provider === "openai-compatible" && interactive ? await promptWithDefault(io, "Base URL", "") : undefined);
-
-  const config: DailyBriefModelConfig = {
-    provider,
-    model,
-    credentialRef,
-    ...(baseUrl ? { baseUrl } : {})
-  };
-
-  writeModelConfig(config, resolveDailyBriefPaths(env).configPath);
-
-  if (flags["api-key"]) {
-    putCredential(credentialRef, toApiKeyCredential(provider, flags["api-key"]), resolveDailyBriefPaths(env).authPath);
-  }
-
-  io.stdout(`Model configured: ${provider}/${model}`);
-  io.stdout(`Credential Ref: ${credentialRef}`);
 }
 
 function parseFlags(args: string[]): Record<string, string | undefined> {
@@ -572,15 +658,11 @@ function defaultCredentialRef(provider: ModelProvider): string | undefined {
 
 async function promptWithDefault(io: CliIo, label: string, defaultValue: string): Promise<string> {
   if (!io.prompt) {
-    throw new Error(`model configure requires --${label.toLowerCase().replaceAll(" ", "-")}`);
+    throw new Error(nonInteractiveSetupMessage());
   }
 
   const answer = await io.prompt(`${label}${defaultValue ? ` (${defaultValue})` : ""}:`);
   return answer.trim() || defaultValue;
-}
-
-function missingFlag(name: string): never {
-  throw new Error(`model configure requires --${name}`);
 }
 
 function optionsFromEnv(env: CliEnv) {
@@ -593,6 +675,7 @@ function optionsFromEnv(env: CliEnv) {
     agentRunRoot: paths.agentRunRoot,
     archiveRoot: paths.briefArchiveRoot,
     modelRuntimeEnv: env,
+    discordEnv: env,
     ...(discordWebhookUrl ? { discordWebhookUrl } : {}),
     ...(env.DAILY_BRIEF_DISCORD_TEMPLATE_PATH ? { discordTemplatePath: env.DAILY_BRIEF_DISCORD_TEMPLATE_PATH } : {})
   };
@@ -660,6 +743,10 @@ function unquoteDotenvValue(value: string): string {
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export async function isCliEntrypoint(argvPath: string | undefined, moduleUrl = import.meta.url): Promise<boolean> {

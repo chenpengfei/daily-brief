@@ -51,6 +51,7 @@ describe("daily workflow orchestration", () => {
         sourceItemRoot,
         archiveRoot,
         agentRunRoot,
+        discordEnv: { DAILY_BRIEF_HOME: directory },
         modelRuntimeEnv: fauxRuntimeEnv()
       });
       const secondRun = await runOnce({
@@ -59,6 +60,7 @@ describe("daily workflow orchestration", () => {
         sourceItemRoot,
         archiveRoot,
         agentRunRoot,
+        discordEnv: { DAILY_BRIEF_HOME: directory },
         modelRuntimeEnv: fauxRuntimeEnv()
       });
       const stored = await readSourceItems(date, sourceItemRoot);
@@ -120,7 +122,7 @@ describe("daily workflow orchestration", () => {
         sourceItemRoot
       );
       const generated = await generateOnce({ date, sourceItemRoot, archiveRoot, modelRuntimeEnv: fauxRuntimeEnv() });
-      const delivery = await deliverOnce({ date, sourceItemRoot, archiveRoot });
+      const delivery = await deliverOnce({ date, sourceItemRoot, archiveRoot, discordEnv: { DAILY_BRIEF_HOME: directory } });
 
       expect(generated.archivePath).toBe(join(archiveRoot, "2026", "05", "2026-05-28.md"));
       expect(delivery).toEqual({ status: "skipped", reason: "DISCORD_WEBHOOK_URL is not configured" });

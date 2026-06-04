@@ -13,21 +13,18 @@ daily-brief status
 Development usage from a repository checkout uses `npm run cli --`:
 
 ```bash
-npm run cli -- collect
-npm run cli -- generate
-npm run cli -- deliver
 npm run cli -- status
 npm run cli -- run-once
+npm run cli -- --version
 ```
 
 Expected local cadence:
 
-- 06:00 local time: run `collect`.
-- 07:00 local time: run `run-once` or `generate` followed by `deliver`.
+- Run `daily-brief run-once` once per Daily Brief Cadence window.
 
 Scheduler integration is intentionally deployment-neutral. A local cron, launchd job, systemd timer, GitHub Actions workflow, or another scheduler can call the commands above; the repository does not bind the MVP to a specific host.
 
-`run-once` executes collection, brief generation/archive, and Discord delivery in order. Source Item writes are deduplicated by Source Item id and content hash within the daily JSONL store, and Daily Brief generation merges repeated mentions into one multi-citation Signal, so rerunning the workflow for the same Collection Window does not duplicate equivalent Signals.
+`run-once` executes collection, brief generation/archive, and Discord delivery in order. It prints human-readable progress for Source collection, Agent Stage execution, archiving, and delivery while the run is active. Source Item writes are deduplicated by Source Item id and content hash within the daily JSONL store, and Daily Brief generation merges repeated mentions into one multi-citation Signal, so rerunning the workflow for the same Collection Window does not duplicate equivalent Signals.
 
 ## Manual run
 
@@ -41,7 +38,7 @@ npm run cli -- status
 
 `sources list` confirms which Sources are enabled, including the default `github-trending-daily` Source. `run-once` performs collection, brief generation, archive writing, and Discord Delivery once. `status` reports operational health after the run.
 
-Discord Delivery uses `DISCORD_WEBHOOK_URL` from the shell environment or local `.env`; `.env` is loaded automatically by the Operational CLI and does not need to be sourced manually.
+Discord Delivery uses the configured credential reference, or `DISCORD_WEBHOOK_URL` from the shell environment or local `.env`; `.env` is loaded automatically by the Operational CLI and does not need to be sourced manually. An explicit `delivery.enabled: false` in `config.yaml` disables delivery and takes precedence over `DISCORD_WEBHOOK_URL`.
 
 ## Runtime configuration
 
@@ -57,13 +54,10 @@ Installed operational paths can be adjusted through environment variables:
 Model/provider and delivery configuration should normally be managed with:
 
 ```bash
-daily-brief model configure
-daily-brief model status
-daily-brief delivery configure --enabled true --webhook-url <url>
-daily-brief delivery status
+daily-brief setup
 ```
 
-Secrets live in `~/.daily-brief/auth.json` or environment variables, never in `sources.yaml` or committed project files. Installed CLI configuration does not accept the faux provider; faux is reserved for tests through an explicit test-only runtime gate.
+Secrets live in `~/.daily-brief/auth.json` or environment variables, never in `sources.yaml` or committed project files. `daily-brief setup` requires interactive input; CI and scripted environments should create the user configuration files directly under `DAILY_BRIEF_HOME`. Installed CLI configuration does not accept the faux provider; faux is reserved for tests through an explicit test-only runtime gate.
 
 `run-once` does not archive a normal Daily Brief when every enabled Source fails or when no Source Items exist for the requested date. It reports a Core Workflow Failure instead, because a false low-signal brief would hide collection failure.
 

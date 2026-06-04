@@ -18,15 +18,13 @@ Daily Brief configures and uses LLM Providers through Pi model/provider/API/OAut
 
 ### Includes
 
-- `daily-brief model configure`.
-- `daily-brief model login`.
-- `daily-brief model logout`.
-- `daily-brief model status`.
+- LLM Provider configuration through `daily-brief setup`.
+- Optional OAuth login and API key storage from the Setup Wizard.
 - Default recommended provider/model: `openai-codex` / `gpt-5.5`.
 - Support for Pi-backed OpenAI, DeepSeek, and OpenAI-compatible model choices.
 - `auth.json` credential store with multiple credentials.
 - `credentialRef` support using `provider.name` and `env:NAME`.
-- Secret-redacted model status.
+- Secret-redacted model readiness/status output.
 
 ### Excludes
 
@@ -36,23 +34,23 @@ Daily Brief configures and uses LLM Providers through Pi model/provider/API/OAut
 
 ## Acceptance Criteria
 
-- Given `daily-brief model configure` runs,
+- Given `daily-brief setup` reaches model configuration,
   When a user selects a provider and model,
   Then `config.yaml` stores non-secret provider/model fields and a credential reference,
-  Evidence: CLI/config integration test.
+  Evidence: setup/config integration test.
 
-- Given `daily-brief model configure` runs with non-interactive flags,
-  When required provider, model, and credential reference values are supplied,
-  Then `config.yaml` is updated without prompting; otherwise the command exits with a clear missing-flag error,
-  Evidence: CLI non-interactive configure test.
+- Given `daily-brief setup` runs without interactive input,
+  When the command starts,
+  Then it exits with file/environment-variable configuration guidance instead of accepting non-interactive model flags,
+  Evidence: setup non-interactive command test.
 
 - Given an API-key provider is configured,
   When the user supplies a credential,
-  Then `auth.json` stores it under a stable credential reference and `model status` redacts the secret,
-  Evidence: credential store test and status output fixture.
+  Then `auth.json` stores it under a stable credential reference and readiness/status output redacts the secret,
+  Evidence: credential store test and redaction fixture.
 
 - Given `openai-codex` is selected,
-  When model login is invoked,
+  When setup login is invoked,
   Then Daily Brief uses Pi OAuth/provider helpers rather than custom Codex transport code,
   Evidence: test with mocked Pi OAuth helper and code review notes.
 
@@ -61,10 +59,10 @@ Daily Brief configures and uses LLM Providers through Pi model/provider/API/OAut
   Then model resolution uses the selected reference without deleting unused credentials,
   Evidence: unit test for credential resolution.
 
-- Given `daily-brief model logout` runs for a selected credential reference,
-  When the credential exists,
-  Then only that credential reference is removed or marked inactive and other credentials remain available,
-  Evidence: credential logout test.
+- Given setup is rerun,
+  When the user keeps existing model credential choices,
+  Then credentials are preserved and unused credentials remain available,
+  Evidence: setup reentrancy and credential store tests.
 
 ## Evidence Required
 
@@ -74,17 +72,17 @@ Daily Brief configures and uses LLM Providers through Pi model/provider/API/OAut
   - `npm run typecheck`
 - Tests:
   - Provider config tests.
-  - Non-interactive configure tests.
+  - Setup non-interactive failure tests.
   - Credential ref resolution tests.
-  - Credential logout tests.
+  - Setup reentrancy credential preservation tests.
   - Secret redaction tests.
   - Mocked Pi OAuth tests.
 - Files:
   - Model config module.
   - Credential store module.
-  - CLI model commands.
+  - Setup Wizard model configuration path.
 - Logs/status:
-  - Sample `daily-brief model status` output with redaction.
+  - Sample setup/status output with redaction.
 
 ## Human Review Notes
 
@@ -99,7 +97,7 @@ Daily Brief configures and uses LLM Providers through Pi model/provider/API/OAut
 - Likely gaps:
   - Provider model is too narrow.
   - `auth.json` credential store does not yet match the PRD.
-  - CLI model commands do not exist.
+  - Older documentation may still mention removed public model commands.
 
 ## PRD Traceability
 

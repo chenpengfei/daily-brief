@@ -53,7 +53,7 @@ Build a Daily Brief Agent on TypeScript, Node.js, and the Pi Agent Runtime. The 
 - Source Item Store should be tested for JSONL append/read behavior, path calculation, deduplication support, and malformed record handling.
 - Brief Module should be tested with fixed Source Item fixtures to verify Signal selection, duplicate merging through multi-citation Signals, low-signal output, Source Coverage text, and Markdown structure.
 - Discord Delivery should be tested with a mocked transport to verify notification body shape and failure behavior.
-- Operational CLI should be tested at the command boundary for run-once, collect, generate, deliver, status, and source management flows.
+- Operational CLI should be tested at the command boundary for setup, run-once, status, version, and source management flows. Lower-level collection, generation, and delivery phases are exercised through workflow APIs and `run-once`.
 
 ## Out of Scope
 
