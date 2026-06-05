@@ -126,18 +126,19 @@ describe("workflow CLI commands", () => {
     }
   });
 
-  it("skips delivery when no stored Discord webhook is configured", async () => {
+  it("does not treat legacy DISCORD_WEBHOOK_URL env as delivery configuration", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-disabled-delivery-"));
     const registryPath = join(directory, "sources.yaml");
     const output: string[] = [];
 
     try {
-      await writeFauxModelConfig(directory, ["delivery:", "  enabled: false"]);
+      await writeFauxModelConfig(directory);
       await writeFixtureRegistry(directory, registryPath);
 
       await runCli(["run-once", "--date", "2026-06-03"], captureOutput(output), {
         DAILY_BRIEF_HOME: directory,
-        DAILY_BRIEF_DATA_HOME: directory
+        DAILY_BRIEF_DATA_HOME: directory,
+        DISCORD_WEBHOOK_URL: "https://discord.example/legacy-webhook"
       });
 
       expect(output.join("\n")).toContain("Discord delivery: skipped (Discord delivery webhook is not configured)");

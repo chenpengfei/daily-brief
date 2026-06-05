@@ -11,7 +11,7 @@ Patch release for the simplified public CLI setup workflow.
 - Simplifies the public CLI around `setup`, `run-once`, `status`, `sources`, `version`, and help.
 - Reworks `daily-brief setup` into an interactive wizard that preserves existing files by default and guides model credential and optional Discord delivery configuration.
 - Adds human-readable `run-once` progress output and clearer Source listing/edit guidance.
-- Makes `delivery.enabled: false` take precedence over `DISCORD_WEBHOOK_URL`, preventing accidental Discord sends when delivery is disabled in config.
+- Keeps Discord delivery configuration in `config.yaml` and `auth.json`, and reports an explicit skipped status when no stored webhook is configured.
 
 ### Installation and Upgrade Notes
 

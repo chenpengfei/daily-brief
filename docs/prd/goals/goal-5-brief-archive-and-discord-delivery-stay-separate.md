@@ -53,10 +53,10 @@ The full Daily Brief is stored in the Markdown Brief Archive, while Discord Deli
   Then one webhook request is sent and the delivery result is `{ status: "sent" }`,
   Evidence: `npm test -- test/discord/delivery.test.ts` covers mocked webhook sending.
 
-- Given no Discord webhook configuration,
+- Given Discord Delivery has no enabled stored webhook credential,
   When delivery runs,
-  Then delivery is skipped with reason `DISCORD_WEBHOOK_URL is not configured` and the archived brief remains the full record,
-  Evidence: `npm test -- test/agent/daily-workflow.test.ts` covers skipped delivery.
+  Then delivery is skipped with reason `Discord delivery webhook is not configured` and the archived brief remains the full record,
+  Evidence: `npm test -- test/agent/daily-workflow.test.ts` and `npm test -- test/cli/workflow-commands.test.ts` cover skipped delivery and the rejected legacy env path.
 
 - Given Discord returns a non-success response,
   When delivery runs,
@@ -101,6 +101,9 @@ The full Daily Brief is stored in the Markdown Brief Archive, while Discord Deli
   - `renderDiscordNotification` uses `templates/discord-notification.md`.
   - Discord tests cover short notification rendering, webhook sending, failed webhook responses, and Core Workflow Failure notifications.
   - Workflow tests cover skipped Discord Delivery when no webhook is configured.
+- Superseded by PR #36 / Goal 19:
+  - Public runtime env overrides are limited to `DAILY_BRIEF_HOME` and `DAILY_BRIEF_DATA_HOME`.
+  - `DISCORD_WEBHOOK_URL` is no longer a supported delivery configuration path; Discord delivery is configured through `config.yaml` and `auth.json`.
 - Likely gaps:
   - A dedicated Brief Archive unit test may be useful if archive behavior should not rely only on workflow tests.
   - Completion evidence should include a sample notification body and archived brief path.
