@@ -1,6 +1,6 @@
 {
   "name": "@chenpengfei/daily-brief",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Agent-driven daily brief CLI for manually curated Agent architecture and AI Coding sources.",
   "private": false,
   "type": "module",
