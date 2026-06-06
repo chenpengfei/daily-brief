@@ -401,7 +401,7 @@ function summarizeOperationalStatus(
   if (!setupReady) {
     return {
       health: "partial-failure",
-      message: "Daily Brief setup is incomplete.",
+      message: "Daily Brief cannot determine today's run state until configuration is ready.",
       materialPartialFailures: []
     };
   }
@@ -426,11 +426,11 @@ function chooseNextAction(
   today: OperationalStatusReport["today"]
 ): string {
   if (setup.config.state !== "ok") {
-    return "daily-brief setup";
+    return "daily-brief config";
   }
 
   if (setup.sourceRegistry.state !== "ok") {
-    return setup.sourceRegistry.state === "missing" ? "daily-brief setup" : "daily-brief sources validate";
+    return "daily-brief config";
   }
 
   if (setup.sourceRegistry.enabledCount === 0) {
@@ -438,15 +438,15 @@ function chooseNextAction(
   }
 
   if (setup.model.state !== "ok") {
-    return "daily-brief setup";
+    return "daily-brief config";
   }
 
   if (setup.data.state !== "ok") {
-    return `Check data directory permissions: ${setup.data.path}`;
+    return "daily-brief config";
   }
 
   if (setup.delivery.state === "not-ready" || setup.delivery.state === "invalid") {
-    return "daily-brief setup";
+    return "daily-brief config";
   }
 
   if (today.briefArchive.state !== "ok") {

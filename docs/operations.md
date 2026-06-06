@@ -8,12 +8,14 @@ Installed usage uses the `daily-brief` binary:
 daily-brief setup
 daily-brief run-once --date 2026-05-28
 daily-brief status
+daily-brief config
 ```
 
 Development usage from a repository checkout uses `npm run cli --`:
 
 ```bash
 npm run cli -- status
+npm run cli -- config
 npm run cli -- run-once
 npm run cli -- --version
 ```
@@ -34,9 +36,10 @@ For a one-off Manual Run against the configured Sources:
 npm run cli -- sources list
 npm run cli -- run-once
 npm run cli -- status
+npm run cli -- config
 ```
 
-`sources list` confirms which Sources are enabled, including the default `github-trending-daily` Source. `run-once` performs collection, brief generation, archive writing, and Discord Delivery once. `status` reports setup readiness, today's run state, active paths, and the next suggested action.
+`sources list` confirms which Sources are enabled, including the default `github-trending-daily` Source. `run-once` performs collection, brief generation, archive writing, and Discord Delivery once. `status` reports today's Daily Brief Run Status and the next suggested action. `config` reports paths, configuration readiness, model and delivery settings, Brief settings, generated-data readiness, and environment overrides without exposing secrets.
 
 Discord Delivery uses the configured credential reference in `config.yaml` and `auth.json`. If Discord Delivery is disabled or its webhook credential is missing, delivery is skipped with an explicit reason.
 

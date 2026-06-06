@@ -126,6 +126,17 @@ export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv 
     return;
   }
 
+  if (command === "config") {
+    if (args.length > 1) {
+      throw new Error("daily-brief config does not accept subcommands or flags.");
+    }
+
+    const options = optionsFromEnv(env);
+    const status = await getOperationalStatus(options);
+    printConfigurationSummary(status, io, env);
+    return;
+  }
+
   if (command === "sources") {
     const options = optionsFromEnv(env);
     await handleSourcesCommand(subcommand, value, io, options.sourceRegistryPath);
@@ -172,23 +183,13 @@ function formatDeliveryStatus(delivery: { status: string; reason?: string }): st
 
 function printOperationalStatus(status: OperationalStatusReport, io: CliIo): void {
   io.stdout("Daily Brief status");
-  io.stdout(`Health: ${status.health} - ${status.message}`);
+  io.stdout(`Health: ${status.health} - ${formatRunStatusMessage(status)}`);
   io.stdout(`Date: ${status.dateKey}`);
-  io.stdout(`System timezone: ${status.systemTimezone}`);
-  io.stdout(`Home: ${status.paths.home}`);
-  io.stdout(`Data: ${status.paths.dataHome}`);
-  io.stdout("");
-  io.stdout("Setup readiness");
-  io.stdout(formatStatusCheck("Config", status.setup.config));
-  io.stdout(formatSourceRegistryCheck(status.setup.sourceRegistry));
-  io.stdout(formatModelCheck(status.setup.model));
-  io.stdout(formatStatusCheck("Delivery", status.setup.delivery));
-  io.stdout(formatStatusCheck("Data", status.setup.data));
   io.stdout("");
   io.stdout("Today run state");
-  io.stdout(formatStatusCheck("Source Items", status.today.sourceItems));
-  io.stdout(formatStatusCheck("Brief Archive", status.today.briefArchive));
-  io.stdout(formatStatusCheck("Agent Run Artifacts", status.today.agentRunArtifacts));
+  io.stdout(formatRunStatusCheck("Source Items", status.today.sourceItems));
+  io.stdout(formatRunStatusCheck("Brief Archive", status.today.briefArchive));
+  io.stdout(formatRunStatusCheck("Agent Run Artifacts", status.today.agentRunArtifacts));
   io.stdout("");
   io.stdout(`Next: ${status.nextAction}`);
 
@@ -197,30 +198,273 @@ function printOperationalStatus(status: OperationalStatusReport, io: CliIo): voi
   }
 }
 
-function formatStatusCheck(label: string, check: { state: string; label: string; path?: string; detail?: string }): string {
-  const detail = check.detail ? ` - ${check.detail}` : "";
-  const path = check.path ? ` (${check.path})` : "";
-  return `- ${label}: ${check.state} - ${check.label}${detail}${path}`;
+function printConfigurationSummary(status: OperationalStatusReport, io: CliIo, env: CliEnv): void {
+  const config = readConfigForDisplay(status.paths.configPath);
+
+  io.stdout("Daily Brief configuration");
+  io.stdout("");
+  io.stdout("Paths");
+  io.stdout(`  Home: ${status.paths.home}`);
+  io.stdout(`  Config: ${status.paths.configPath}`);
+  io.stdout(`  Sources: ${status.paths.sourceRegistryPath}`);
+  io.stdout(`  Auth: ${status.paths.authPath}`);
+  io.stdout(`  Data: ${status.paths.dataHome}`);
+  io.stdout(`  Source Items: ${status.paths.sourceItemRoot}`);
+  io.stdout(`  Agent Runs: ${status.paths.agentRunRoot}`);
+  io.stdout(`  Briefs: ${status.paths.archiveRoot}`);
+  io.stdout("");
+  io.stdout("Sources");
+  io.stdout(`  Registry: ${formatConfigState(status.setup.sourceRegistry)}`);
+  io.stdout(
+    `  Enabled: ${
+      typeof status.setup.sourceRegistry.enabledCount === "number" &&
+      typeof status.setup.sourceRegistry.totalCount === "number"
+        ? `${status.setup.sourceRegistry.enabledCount}/${status.setup.sourceRegistry.totalCount}`
+        : "unknown"
+    }`
+  );
+  const sourceRegistryIssue = formatSourceRegistryIssue(status.setup.sourceRegistry);
+  if (sourceRegistryIssue) {
+    io.stdout(`  Issue: ${sourceRegistryIssue}`);
+  }
+  io.stdout("");
+  io.stdout("Model");
+  io.stdout(`  Provider: ${formatConfiguredModelValue(config, "provider")}`);
+  io.stdout(`  Model: ${formatConfiguredModelValue(config, "model")}`);
+  io.stdout(`  Credential: ${formatConfiguredModelCredential(config, status.setup.model.state)}`);
+  if (config.value?.model?.baseUrl) {
+    io.stdout(`  Base URL: ${config.value.model.baseUrl}`);
+  }
+  const modelIssue = formatModelConfigIssue(config, status.setup.model);
+  if (modelIssue) {
+    io.stdout(`  Issue: ${modelIssue}`);
+  }
+  io.stdout("");
+  io.stdout("Delivery");
+  io.stdout(`  Discord: ${formatConfiguredDeliveryStatus(config, status.setup.delivery.state)}`);
+  io.stdout(`  Webhook credential: ${formatConfiguredDeliveryCredential(config, status.setup.delivery)}`);
+  const deliveryIssue = formatDeliveryConfigIssue(config, status.setup.delivery);
+  if (deliveryIssue) {
+    io.stdout(`  Issue: ${deliveryIssue}`);
+  }
+  io.stdout("");
+  io.stdout("Brief");
+  io.stdout(`  Language: ${formatBriefConfigValue(config, "language", "zh")}`);
+  io.stdout(`  Max signals: ${formatBriefConfigValue(config, "maxSignals", "5")}`);
+  io.stdout("");
+  io.stdout("Data");
+  io.stdout(`  Directory: ${formatConfigState(status.setup.data)}`);
+  const dataIssue = formatConfigIssue(status.setup.data);
+  if (dataIssue) {
+    io.stdout(`  Issue: ${dataIssue}`);
+  }
+  io.stdout("");
+  io.stdout("Environment");
+  io.stdout(`  DAILY_BRIEF_HOME: ${formatEnvPathStatus(env.DAILY_BRIEF_HOME)}`);
+  io.stdout(`  DAILY_BRIEF_DATA_HOME: ${formatEnvPathStatus(env.DAILY_BRIEF_DATA_HOME)}`);
 }
 
-function formatSourceRegistryCheck(
-  check: OperationalStatusReport["setup"]["sourceRegistry"]
+function formatRunStatusMessage(status: OperationalStatusReport): string {
+  if (status.coreFailure?.kind === "unreadable-source-registry") {
+    return "Source Registry is missing or invalid.";
+  }
+
+  return status.message;
+}
+
+function formatRunStatusCheck(
+  label: string,
+  check: { state: string; label: string; itemCount?: number; fileCount?: number }
 ): string {
-  const counts =
-    typeof check.enabledCount === "number" && typeof check.totalCount === "number"
-      ? ` - ${check.enabledCount}/${check.totalCount} enabled`
-      : "";
-  const detail = check.detail && !counts.includes(check.detail) ? ` - ${check.detail}` : "";
-  const path = check.path ? ` (${check.path})` : "";
-  return `- Source Registry: ${check.state} - ${check.label}${counts}${detail}${path}`;
+  const count =
+    typeof check.itemCount === "number"
+      ? ` - ${check.itemCount} item(s)`
+      : typeof check.fileCount === "number"
+        ? ` - ${check.fileCount} artifact(s)`
+        : "";
+  return `- ${label}: ${check.state} - ${check.label}${count}`;
 }
 
-function formatModelCheck(check: OperationalStatusReport["setup"]["model"]): string {
-  const selected = check.provider && check.model ? ` - ${check.provider}/${check.model}` : "";
-  const credential = check.credentialRef ? ` - credential ${check.credentialRef}` : "";
-  const detail = check.detail ? ` - ${check.detail}` : "";
-  const path = check.path ? ` (${check.path})` : "";
-  return `- Model: ${check.state} - ${check.label}${selected}${credential}${detail}${path}`;
+function formatConfigState(check: { state: string; label: string }): string {
+  return `${check.state} - ${check.label}`;
+}
+
+function formatConfigIssue(check: { state: string; label: string; detail?: string }): string | undefined {
+  if (check.state === "ok" || check.state === "disabled") {
+    return undefined;
+  }
+
+  return check.detail ?? check.label;
+}
+
+function formatSourceRegistryIssue(check: { state: string; label: string; detail?: string }): string | undefined {
+  if (check.state === "ok") {
+    return undefined;
+  }
+
+  if (check.state === "missing") {
+    return check.label;
+  }
+
+  return check.detail ?? check.label;
+}
+
+function formatCredentialStatus(ref: string | undefined, state: string, provider: string | undefined): string {
+  if (!ref) {
+    return provider === "faux" ? "(not required)" : "(missing)";
+  }
+
+  return `${ref} (${state === "ok" ? "configured" : "missing"})`;
+}
+
+function formatConfiguredModelValue(
+  config: { value?: ReturnType<typeof readDailyBriefConfig>; error?: string },
+  key: "provider" | "model"
+): string {
+  if (config.error) {
+    return "(unavailable)";
+  }
+
+  return config.value?.model?.[key] ?? "(not configured)";
+}
+
+function formatConfiguredModelCredential(
+  config: { value?: ReturnType<typeof readDailyBriefConfig>; error?: string },
+  state: string
+): string {
+  if (config.error) {
+    return "(unavailable)";
+  }
+
+  if (!config.value?.model) {
+    return "(not configured)";
+  }
+
+  return formatCredentialStatus(config.value.model.credentialRef, state, config.value.model.provider);
+}
+
+function formatModelConfigIssue(
+  config: { value?: ReturnType<typeof readDailyBriefConfig>; error?: string },
+  check: { state: string; label: string; detail?: string }
+): string | undefined {
+  if (check.state === "ok") {
+    return undefined;
+  }
+
+  if (config.error) {
+    return config.error;
+  }
+
+  if (!config.value?.model) {
+    return "Model config missing";
+  }
+
+  return check.detail ?? check.label;
+}
+
+function formatDeliveryCredentialStatus(check: OperationalStatusReport["setup"]["delivery"]): string {
+  if (check.state === "disabled") {
+    return "(not required)";
+  }
+
+  if (!check.detail) {
+    return "(missing)";
+  }
+
+  return `${check.detail} (${check.state === "ok" ? "configured" : "missing"})`;
+}
+
+function formatConfiguredDeliveryStatus(
+  config: { value?: ReturnType<typeof readDailyBriefConfig>; error?: string },
+  state: string
+): string {
+  if (config.error) {
+    return "(unavailable)";
+  }
+
+  if (!config.value?.delivery) {
+    return "(not configured)";
+  }
+
+  return config.value.delivery.enabled ? state : "disabled";
+}
+
+function formatConfiguredDeliveryCredential(
+  config: { value?: ReturnType<typeof readDailyBriefConfig>; error?: string },
+  check: OperationalStatusReport["setup"]["delivery"]
+): string {
+  if (config.error) {
+    return "(unavailable)";
+  }
+
+  if (!config.value?.delivery) {
+    return "(not configured)";
+  }
+
+  if (!config.value.delivery.enabled) {
+    return "(not required)";
+  }
+
+  return formatDeliveryCredentialStatus(check);
+}
+
+function formatDeliveryConfigIssue(
+  config: { value?: ReturnType<typeof readDailyBriefConfig>; error?: string },
+  check: { state: string; label: string; detail?: string }
+): string | undefined {
+  if (config.error) {
+    return config.error;
+  }
+
+  if (!config.value?.delivery) {
+    return "Delivery config missing";
+  }
+
+  if (!config.value.delivery.enabled || check.state === "ok") {
+    return undefined;
+  }
+
+  if (check.label === "Discord delivery webhook credential missing" && check.detail) {
+    return `Discord webhook credential missing: ${check.detail}`;
+  }
+
+  return check.detail ?? check.label;
+}
+
+function readConfigForDisplay(path: string): { value?: ReturnType<typeof readDailyBriefConfig>; error?: string } {
+  try {
+    return { value: readDailyBriefConfig(path) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function formatBriefConfigValue(
+  config: { value?: ReturnType<typeof readDailyBriefConfig>; error?: string },
+  key: string,
+  defaultValue: string
+): string {
+  if (config.error) {
+    return `unavailable (${config.error})`;
+  }
+
+  const brief = config.value?.brief;
+  if (!isRecord(brief)) {
+    return `${defaultValue} (default)`;
+  }
+
+  const value = brief[key];
+  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+    return `${defaultValue} (default)`;
+  }
+
+  const formatted = String(value);
+  return formatted === defaultValue ? `${formatted} (default)` : formatted;
+}
+
+function formatEnvPathStatus(value: string | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed ? `override (${trimmed})` : "default";
 }
 
 function readWorkflowDateOption(flags: Record<string, string | undefined>): { date: Date; dateKey: string } {
@@ -317,12 +561,17 @@ function printHelp(io: CliIo): void {
       "  daily-brief setup",
       "  daily-brief run-once [--date YYYY-MM-DD]",
       "  daily-brief status",
+      "  daily-brief config",
       "  daily-brief sources list",
       "  daily-brief sources edit",
       "  daily-brief sources validate",
       "  daily-brief sources enable <source-id>",
       "  daily-brief sources disable <source-id>",
-      "  daily-brief version"
+      "  daily-brief version",
+      "",
+      "Commands:",
+      "  status  Show Daily Brief Run Status for today",
+      "  config  Show the read-only Daily Brief Configuration Summary"
     ].join("\n")
   );
 }

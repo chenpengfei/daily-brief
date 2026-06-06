@@ -193,8 +193,16 @@ The short Discord Delivery format for a generated Daily Brief: date, a few headl
 _Avoid_: Full daily brief, feedback UI, control command
 
 **Operational CLI**:
-The installed terminal entry point for manually running, inspecting, and configuring Daily Brief operations. The Operational CLI exposes a small, stable, user-facing command surface; lower-level workflow phases may remain internal capabilities rather than direct user commands. It can run setup, manage Sources, trigger Manual Runs, inspect setup readiness and current run state, and expose stable commands that external schedulers may invoke.
+The installed terminal entry point for manually running, inspecting, and configuring Daily Brief operations. The Operational CLI exposes a small, stable, user-facing command surface; lower-level workflow phases may remain internal capabilities rather than direct user commands. It can run setup, manage Sources, trigger Manual Runs, inspect Daily Brief Run Status, show the Daily Brief Configuration Summary, and expose stable commands that external schedulers may invoke.
 _Avoid_: Chat product, long-running gateway, Discord control surface, debug-only workflow step surface
+
+**Daily Brief Run Status**:
+The business-facing state of Daily Brief generation for a given date, including whether Source Items, Agent Run Artifacts, and a Brief Archive exist and what business action should happen next. It is distinct from configuration readiness, file path discovery, provider setup, credential inspection, and local environment diagnostics.
+_Avoid_: Config status, path inventory, setup report, environment diagnostics
+
+**Daily Brief Configuration Summary**:
+The Operational CLI's read-only view of configured paths, Source Registry readiness, LLM Provider Configuration, Delivery Channel configuration, Brief settings, and relevant path environment overrides. It reports whether required references are present without exposing stored secrets or Daily Brief Run Status.
+_Avoid_: Daily Brief Run Status, setup wizard, secret dump, workflow progress
 
 **Setup Wizard**:
 The interactive Operational CLI flow, exposed as `daily-brief setup`, that prepares an installed Daily Brief Agent for first use by creating user files and guiding required configuration choices. The Setup Wizard may configure Sources, LLM Provider access, and Delivery Channels, while scheduled workflow commands remain non-interactive. Re-running the Setup Wizard should use explicit prompts to preserve or update existing configuration rather than a force-overwrite flag. The Setup Wizard requires interactive user input and should not silently create partial default configuration in non-interactive environments.
