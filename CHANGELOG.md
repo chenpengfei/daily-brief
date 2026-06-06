@@ -2,6 +2,28 @@
 
 All notable changes for Formal Releases are recorded here. GitHub Release notes should be derived from the matching version entry.
 
+## 0.1.4 - 2026-06-06
+
+Patch release for command-surface separation and configuration-first inspection.
+
+### User-visible Changes
+
+- Adds `daily-brief config` as the read-only place to inspect paths, Source Registry readiness, model settings, delivery settings, Brief settings, generated-data readiness, and path environment overrides without exposing secrets.
+- Narrows `daily-brief status` to Daily Brief Run Status only: today's run state and next action without setup-path diagnostics.
+- Redirects setup/config blockers toward `daily-brief config` and keeps `status` output focused on operational run state.
+- Keeps configuration redaction behavior unchanged: credential references are shown, not raw secrets.
+
+### Installation and Upgrade Notes
+
+- Upgrade with `npm install -g @chenpengfei/daily-brief@latest`.
+- Run `daily-brief setup` after upgrading if your previous model or Discord configuration used environment-backed credential references.
+- Scripted environments should write `config.yaml`, `sources.yaml`, and `auth.json` directly under `DAILY_BRIEF_HOME`; use `DAILY_BRIEF_DATA_HOME` when generated data should live elsewhere.
+
+### Known Limitations
+
+- `daily-brief status` remains a local inspection command: it does not collect Sources, call an LLM, refresh credentials, generate a brief, or send Discord notifications.
+- Environment variables for installed usage remain limited to path overrides: `DAILY_BRIEF_HOME` and `DAILY_BRIEF_DATA_HOME`.
+
 ## 0.1.3 - 2026-06-06
 
 Patch release for runtime configuration hardening and clearer local inspection output.
