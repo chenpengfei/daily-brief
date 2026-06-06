@@ -102,7 +102,17 @@ Use status after setup, after manual runs, or when diagnosing failures:
 daily-brief status
 ```
 
-Status output reports setup readiness, today's run state, active paths, system timezone, and the next suggested action. It is a local inspection command: it does not refresh OAuth, call an LLM, collect Sources, or send Discord notifications.
+Status output reports today's Daily Brief Run Status and the next suggested action. It does not show configuration paths or setup readiness. It is a local inspection command: it does not refresh OAuth, call an LLM, collect Sources, or send Discord notifications.
+
+## Inspect Configuration
+
+Use config when you need paths, Source Registry readiness, model settings, delivery settings, Brief settings, generated-data readiness, or path environment overrides:
+
+```bash
+daily-brief config
+```
+
+Config output is read-only and redacts secrets. It shows credential names and whether credentials are configured, but it does not print stored API keys, OAuth tokens, or webhook URLs.
 
 ## Paths and Environment
 
@@ -122,7 +132,7 @@ npm install -g @chenpengfei/daily-brief@latest
 "$(npm prefix -g)/bin/daily-brief" status
 ```
 
-Run `daily-brief setup` again when release notes or status output indicate that configuration needs to be refreshed. Setup preserves existing files by default and asks before replacing non-secret configuration. It does not accept a force-overwrite flag and never deletes generated data.
+Run `daily-brief setup` again when release notes or config output indicate that configuration needs to be refreshed. Setup preserves existing files by default and asks before replacing non-secret configuration. It does not accept a force-overwrite flag and never deletes generated data.
 
 ## Troubleshooting
 
@@ -148,12 +158,14 @@ daily-brief sources list
 If model access fails, run:
 
 ```bash
+daily-brief config
 daily-brief setup
 ```
 
 If Discord delivery fails or is skipped, run:
 
 ```bash
+daily-brief config
 daily-brief setup
 ```
 

@@ -17,6 +17,9 @@ describe("workflow CLI commands", () => {
 
     expect(output.join("\n")).toContain("daily-brief run-once");
     expect(output.join("\n")).toContain("daily-brief status");
+    expect(output.join("\n")).toContain("daily-brief config");
+    expect(output.join("\n")).toContain("status  Show Daily Brief Run Status for today");
+    expect(output.join("\n")).toContain("config  Show the read-only Daily Brief Configuration Summary");
     expect(output.join("\n")).toContain("daily-brief sources list");
     expect(output.join("\n")).toContain("daily-brief version");
     expect(output.join("\n")).not.toContain("daily-brief collect");
@@ -60,7 +63,7 @@ describe("workflow CLI commands", () => {
     }
   });
 
-  it("prints Operational Status from configured registry and archive roots", async () => {
+  it("prints Daily Brief Run Status without configuration paths", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-status-"));
     const registryPath = join(directory, "sources.yaml");
     const archiveRoot = join(directory, "briefs");
@@ -80,11 +83,199 @@ describe("workflow CLI commands", () => {
       });
 
       expect(output.join("\n")).toContain(`Health: success - Daily Brief archive exists for ${currentDate()}.`);
-      expect(output.join("\n")).toContain(`Source Registry: ok - Source Registry valid - 0/0 enabled (${registryPath})`);
-      expect(output.join("\n")).toContain(`Brief Archive: ok - Daily Brief archive found (${archivePath})`);
+      expect(output.join("\n")).toContain("Today run state");
+      expect(output.join("\n")).toContain("- Brief Archive: ok - Daily Brief archive found");
+      expect(output.join("\n")).not.toContain("Setup readiness");
+      expect(output.join("\n")).not.toContain("Source Registry:");
+      expect(output.join("\n")).not.toContain("Home:");
+      expect(output.join("\n")).not.toContain("Data:");
+      expect(output.join("\n")).not.toContain(registryPath);
+      expect(output.join("\n")).not.toContain(archivePath);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it("does not print configuration paths when status has a setup-related failure", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-status-missing-registry-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFauxModelConfig(directory);
+
+      await runCli(["status"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
+      });
+
+      const text = output.join("\n");
+      expect(text).toContain("Health: core-failure - Source Registry is missing or invalid.");
+      expect(text).toContain("Next: daily-brief config");
+      expect(text).not.toContain("Setup readiness");
+      expect(text).not.toContain(registryPath);
+      expect(text).not.toContain(directory);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("prints Daily Brief configuration as one segmented command", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-config-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFauxModelConfig(directory, ["brief:", "  language: zh", "  maxSignals: 3"]);
+      await writeFixtureRegistry(directory, registryPath);
+
+      await runCli(["config"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
+      });
+
+      const text = output.join("\n");
+      expect(text).toContain("Daily Brief configuration");
+      expect(text).toContain("Paths");
+      expect(text).toContain(`  Config: ${join(directory, "config.yaml")}`);
+      expect(text).toContain(`  Sources: ${registryPath}`);
+      expect(text).toContain(`  Auth: ${join(directory, "auth.json")}`);
+      expect(text).toContain("Sources");
+      expect(text).toContain("  Registry: ok - Source Registry valid");
+      expect(text).toContain("  Enabled: 1/1");
+      expect(text).not.toContain("Registry: ok - Source Registry valid - 1/1 enabled");
+      expect(text).toContain("Model");
+      expect(text).toContain("  Provider: faux");
+      expect(text).toContain("  Model: faux-daily-brief-renderer");
+      expect(text).toContain("  Credential: (not required)");
+      expect(text).toContain("Delivery");
+      expect(text).toContain("  Discord: (not configured)");
+      expect(text).toContain("  Webhook credential: (not configured)");
+      expect(text).toContain("Brief");
+      expect(text).toContain("  Language: zh (default)");
+      expect(text).toContain("  Max signals: 3");
+      expect(text).toContain("Data");
+      expect(text).toContain("  Directory: ok - Data directory writable");
+      expect(text).toContain("Environment");
+      expect(text).toContain(`  DAILY_BRIEF_HOME: override (${directory})`);
+      expect(text).not.toContain("Detail:");
+      expect(text).not.toMatch(/\u001b\[/);
+      expect(text).not.toContain("Today run state");
+      expect(text).not.toContain("Health:");
+      expect(text).not.toContain("Next:");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("prints missing Source Registry as a short config issue", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-config-missing-sources-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFauxModelConfig(directory);
+
+      await runCli(["config"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
+      });
+
+      const text = output.join("\n");
+      expect(text).toContain(`  Sources: ${registryPath}`);
+      expect(text).toContain("  Registry: missing - Source Registry missing");
+      expect(text).toContain("  Enabled: unknown");
+      expect(text).toContain("  Issue: Source Registry missing");
+      expect(text).not.toContain("ENOENT");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("distinguishes missing delivery config from explicitly disabled delivery", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-config-disabled-delivery-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFauxModelConfig(directory, ["delivery:", "  enabled: false"]);
+      await writeFixtureRegistry(directory, registryPath);
+
+      await runCli(["config"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
+      });
+
+      const text = output.join("\n");
+      expect(text).toContain("Delivery");
+      expect(text).toContain("  Discord: disabled");
+      expect(text).toContain("  Webhook credential: (not required)");
+      expect(text).not.toContain("  Discord: (not configured)");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("prints missing config credentials as an issue instead of dumping detail", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-config-missing-credential-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFile(
+        join(directory, "config.yaml"),
+        ["model:", "  provider: openai", "  model: gpt-4.1-mini", "  credentialRef: openai.default"].join("\n"),
+        "utf8"
+      );
+      await writeFixtureRegistry(directory, registryPath);
+
+      await runCli(["config"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
+      });
+
+      const text = output.join("\n");
+      expect(text).toContain("  Provider: openai");
+      expect(text).toContain("  Credential: openai.default (missing)");
+      expect(text).toContain("  Issue: Credential not found: openai.default");
+      expect(text).not.toContain("Detail:");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not show runtime default model values when model config is missing", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-config-missing-model-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFile(join(directory, "config.yaml"), "brief:\n  language: zh\n", "utf8");
+      await writeFixtureRegistry(directory, registryPath);
+
+      await runCli(["config"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
+      });
+
+      const text = output.join("\n");
+      expect(text).toContain("  Provider: (not configured)");
+      expect(text).toContain("  Model: (not configured)");
+      expect(text).toContain("  Credential: (not configured)");
+      expect(text).toContain("  Issue: Model config missing");
+      expect(text).toContain("  Language: zh (default)");
+      expect(text).toContain("  Max signals: 5 (default)");
+      expect(text).not.toContain("openai-codex");
+      expect(text).not.toContain("gpt-5.5");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not accept subcommands for config", async () => {
+    await expect(runCli(["config", "show"], captureOutput([]), {})).rejects.toThrow(
+      "daily-brief config does not accept subcommands or flags"
+    );
   });
 
   it("does not accept date flags for status", async () => {

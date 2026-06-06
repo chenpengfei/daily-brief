@@ -126,6 +126,56 @@ describe("workflow status", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("points setup-related blockers to the configuration summary", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-status-next-action-"));
+    const registryPath = join(directory, "sources.yaml");
+    const configPath = join(directory, "config.yaml");
+    const dataHome = join(directory, "data");
+    const date = new Date("2026-05-28T07:00:00.000Z");
+
+    try {
+      await mkdir(dataHome, { recursive: true });
+      await writeEnabledRegistry(registryPath);
+
+      await expect(
+        getOperationalStatus({
+          date,
+          env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: dataHome }
+        })
+      ).resolves.toMatchObject({ nextAction: "daily-brief config" });
+
+      await writeFile(configPath, "brief:\n  language: zh\n", "utf8");
+      await expect(
+        getOperationalStatus({
+          date,
+          env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: dataHome }
+        })
+      ).resolves.toMatchObject({ nextAction: "daily-brief config" });
+
+      await writeFile(
+        configPath,
+        ["model:", "  provider: faux", "  model: faux-daily-brief-renderer", "delivery:", "  enabled: true"].join("\n"),
+        "utf8"
+      );
+      await expect(
+        getOperationalStatus({
+          date,
+          env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: dataHome }
+        })
+      ).resolves.toMatchObject({ nextAction: "daily-brief config" });
+
+      await writeFile(configPath, ["model:", "  provider: faux", "  model: faux-daily-brief-renderer"].join("\n"), "utf8");
+      await expect(
+        getOperationalStatus({
+          date,
+          env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: join(directory, "missing-data") }
+        })
+      ).resolves.toMatchObject({ nextAction: "daily-brief config" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 function failedSource(sourceId: string, reason: string) {
@@ -137,4 +187,20 @@ function failedSource(sourceId: string, reason: string) {
     skippedDuplicateCount: 0,
     reason
   };
+}
+
+async function writeEnabledRegistry(path: string): Promise<void> {
+  await writeFile(
+    path,
+    [
+      "sources:",
+      "  - id: fixture-blog",
+      "    platform: blog",
+      "    adapter: fixture",
+      "    target: fixture.json",
+      "    enabled: true",
+      "    notes: Fixture"
+    ].join("\n"),
+    "utf8"
+  );
 }

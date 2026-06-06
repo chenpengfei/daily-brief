@@ -24,6 +24,7 @@ Daily Brief requires Node.js 22 or newer.
 ```bash
 daily-brief run-once
 daily-brief status
+daily-brief config
 daily-brief sources list
 daily-brief version
 ```

@@ -4,11 +4,12 @@ All notable changes for Formal Releases are recorded here. GitHub Release notes 
 
 ## 0.1.3 - 2026-06-06
 
-Patch release for runtime configuration hardening and richer local status output.
+Patch release for runtime configuration hardening and clearer local inspection output.
 
 ### User-visible Changes
 
-- Expands `daily-brief status` into a local readiness report with setup checks, today's run state, active paths, system timezone, and the next suggested action.
+- Adds `daily-brief config` as the read-only place to inspect paths, Source Registry readiness, model settings, delivery settings, Brief settings, generated-data readiness, and path environment overrides without exposing secrets.
+- Narrows `daily-brief status` to Daily Brief Run Status only, removing configuration paths and setup readiness from the default status view.
 - Keeps model and Discord secrets in `auth.json` referenced by `config.yaml`, removing runtime reliance on `env:NAME`, `.env`, and `DISCORD_WEBHOOK_URL` credential paths for installed usage.
 - Reports Discord delivery as explicitly skipped when delivery is disabled or the stored webhook credential is missing.
 - Keeps `daily-brief run-once --date YYYY-MM-DD` available for manual backfills while making `daily-brief status` a no-flag inspection command.
