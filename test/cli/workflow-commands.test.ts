@@ -120,6 +120,34 @@ describe("workflow CLI commands", () => {
     }
   });
 
+  it("uses run-status wording for configuration blockers without setup paths", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-status-delivery-blocker-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFauxModelConfig(directory, ["delivery:", "  enabled: true"]);
+      await writeFixtureRegistry(directory, registryPath);
+
+      await runCli(["status"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
+      });
+
+      const text = output.join("\n");
+      expect(text).toContain(
+        "Health: partial-failure - Daily Brief cannot determine today's run state until configuration is ready."
+      );
+      expect(text).toContain("Next: daily-brief config");
+      expect(text).not.toContain("Daily Brief setup is incomplete.");
+      expect(text).not.toContain("Setup readiness");
+      expect(text).not.toContain(registryPath);
+      expect(text).not.toContain(directory);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("prints Daily Brief configuration as one segmented command", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-config-"));
     const registryPath = join(directory, "sources.yaml");
@@ -151,6 +179,7 @@ describe("workflow CLI commands", () => {
       expect(text).toContain("Delivery");
       expect(text).toContain("  Discord: (not configured)");
       expect(text).toContain("  Webhook credential: (not configured)");
+      expect(text).toContain("  Issue: Delivery config missing");
       expect(text).toContain("Brief");
       expect(text).toContain("  Language: zh (default)");
       expect(text).toContain("  Max signals: 3");
@@ -211,6 +240,32 @@ describe("workflow CLI commands", () => {
       expect(text).toContain("  Discord: disabled");
       expect(text).toContain("  Webhook credential: (not required)");
       expect(text).not.toContain("  Discord: (not configured)");
+      expect(text).not.toContain("  Issue: Delivery config missing");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("prints missing Discord webhook credentials as actionable delivery issues", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-config-missing-webhook-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFauxModelConfig(directory, ["delivery:", "  enabled: true", "  webhookRef: discord.default"]);
+      await writeFixtureRegistry(directory, registryPath);
+
+      await runCli(["config"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
+      });
+
+      const text = output.join("\n");
+      expect(text).toContain("Delivery");
+      expect(text).toContain("  Discord: not-ready");
+      expect(text).toContain("  Webhook credential: discord.default (missing)");
+      expect(text).toContain("  Issue: Discord webhook credential missing: discord.default");
+      expect(text).not.toContain("  Issue: discord.default");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -239,6 +294,30 @@ describe("workflow CLI commands", () => {
       expect(text).toContain("  Credential: openai.default (missing)");
       expect(text).toContain("  Issue: Credential not found: openai.default");
       expect(text).not.toContain("Detail:");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("prints missing required model credentialRef as missing instead of not required", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-config-missing-credential-ref-"));
+    const registryPath = join(directory, "sources.yaml");
+    const output: string[] = [];
+
+    try {
+      await writeFile(join(directory, "config.yaml"), ["model:", "  provider: openai", "  model: gpt-4.1-mini"].join("\n"), "utf8");
+      await writeFixtureRegistry(directory, registryPath);
+
+      await runCli(["config"], captureOutput(output), {
+        DAILY_BRIEF_HOME: directory,
+        DAILY_BRIEF_DATA_HOME: directory
+      });
+
+      const text = output.join("\n");
+      expect(text).toContain("  Provider: openai");
+      expect(text).toContain("  Credential: (missing)");
+      expect(text).toContain("  Issue: credentialRef is required for openai");
+      expect(text).not.toContain("  Credential: (not required)");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

@@ -309,9 +309,9 @@ function formatSourceRegistryIssue(check: { state: string; label: string; detail
   return check.detail ?? check.label;
 }
 
-function formatCredentialStatus(ref: string | undefined, state: string): string {
+function formatCredentialStatus(ref: string | undefined, state: string, provider: string | undefined): string {
   if (!ref) {
-    return "(not required)";
+    return provider === "faux" ? "(not required)" : "(missing)";
   }
 
   return `${ref} (${state === "ok" ? "configured" : "missing"})`;
@@ -340,7 +340,7 @@ function formatConfiguredModelCredential(
     return "(not configured)";
   }
 
-  return formatCredentialStatus(config.value.model.credentialRef, state);
+  return formatCredentialStatus(config.value.model.credentialRef, state, config.value.model.provider);
 }
 
 function formatModelConfigIssue(
@@ -416,8 +416,16 @@ function formatDeliveryConfigIssue(
     return config.error;
   }
 
-  if (!config.value?.delivery || !config.value.delivery.enabled || check.state === "ok") {
+  if (!config.value?.delivery) {
+    return "Delivery config missing";
+  }
+
+  if (!config.value.delivery.enabled || check.state === "ok") {
     return undefined;
+  }
+
+  if (check.label === "Discord delivery webhook credential missing" && check.detail) {
+    return `Discord webhook credential missing: ${check.detail}`;
   }
 
   return check.detail ?? check.label;

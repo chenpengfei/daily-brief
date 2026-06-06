@@ -401,7 +401,7 @@ function summarizeOperationalStatus(
   if (!setupReady) {
     return {
       health: "partial-failure",
-      message: "Daily Brief setup is incomplete.",
+      message: "Daily Brief cannot determine today's run state until configuration is ready.",
       materialPartialFailures: []
     };
   }

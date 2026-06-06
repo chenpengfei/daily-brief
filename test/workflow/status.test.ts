@@ -143,35 +143,60 @@ describe("workflow status", () => {
           date,
           env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: dataHome }
         })
-      ).resolves.toMatchObject({ nextAction: "daily-brief config" });
+      ).resolves.toMatchObject({
+        message: "Daily Brief cannot determine today's run state until configuration is ready.",
+        nextAction: "daily-brief config"
+      });
 
       await writeFile(configPath, "brief:\n  language: zh\n", "utf8");
-      await expect(
-        getOperationalStatus({
-          date,
-          env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: dataHome }
-        })
-      ).resolves.toMatchObject({ nextAction: "daily-brief config" });
+      const modelBlockedStatus = await getOperationalStatus({
+        date,
+        env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: dataHome }
+      });
+      expect(modelBlockedStatus).toMatchObject({
+        message: "Daily Brief cannot determine today's run state until configuration is ready.",
+        nextAction: "daily-brief config"
+      });
+      expect(modelBlockedStatus.message).not.toContain("setup");
+      expect(modelBlockedStatus.message).not.toContain(directory);
 
       await writeFile(
         configPath,
         ["model:", "  provider: faux", "  model: faux-daily-brief-renderer", "delivery:", "  enabled: true"].join("\n"),
         "utf8"
       );
+      const deliveryBlockedStatus = await getOperationalStatus({
+        date,
+        env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: dataHome }
+      });
+      expect(deliveryBlockedStatus).toMatchObject({
+        message: "Daily Brief cannot determine today's run state until configuration is ready.",
+        nextAction: "daily-brief config"
+      });
+      expect(deliveryBlockedStatus.message).not.toContain("setup");
+      expect(deliveryBlockedStatus.message).not.toContain(directory);
+
+      await writeFile(configPath, ["model:", "  provider: faux", "  model: faux-daily-brief-renderer"].join("\n"), "utf8");
+      const dataBlockedStatus = await getOperationalStatus({
+        date,
+        env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: join(directory, "missing-data") }
+      });
+      expect(dataBlockedStatus).toMatchObject({
+        message: "Daily Brief cannot determine today's run state until configuration is ready.",
+        nextAction: "daily-brief config"
+      });
+      expect(dataBlockedStatus.message).not.toContain("setup");
+      expect(dataBlockedStatus.message).not.toContain(directory);
+
       await expect(
         getOperationalStatus({
           date,
           env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: dataHome }
         })
-      ).resolves.toMatchObject({ nextAction: "daily-brief config" });
-
-      await writeFile(configPath, ["model:", "  provider: faux", "  model: faux-daily-brief-renderer"].join("\n"), "utf8");
-      await expect(
-        getOperationalStatus({
-          date,
-          env: { DAILY_BRIEF_HOME: directory, DAILY_BRIEF_DATA_HOME: join(directory, "missing-data") }
-        })
-      ).resolves.toMatchObject({ nextAction: "daily-brief config" });
+      ).resolves.toMatchObject({
+        message: "No Daily Brief archived for 2026-05-28 yet.",
+        nextAction: "daily-brief run-once"
+      });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
