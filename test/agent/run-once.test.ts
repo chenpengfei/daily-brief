@@ -18,7 +18,8 @@ describe("run-once", () => {
       const result = await runOnce({
         date: new Date("2026-05-28T06:00:00.000Z"),
         sourceRegistryPath,
-        archiveRoot
+        archiveRoot,
+        discordEnv: { DAILY_BRIEF_HOME: directory }
       });
 
       expect(result.coreFailure).toMatchObject({ kind: "no-usable-source-items" });

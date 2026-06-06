@@ -196,6 +196,7 @@ describe("daily workflow orchestration", () => {
         sourceRegistryPath: registryPath,
         sourceItemRoot: join(directory, "source-items"),
         archiveRoot,
+        discordEnv: { DAILY_BRIEF_HOME: directory },
         modelRuntimeEnv: { DAILY_BRIEF_HOME: directory }
       });
 
@@ -259,6 +260,7 @@ describe("daily workflow orchestration", () => {
         sourceItemRoot,
         archiveRoot,
         agentRunRoot,
+        discordEnv: { DAILY_BRIEF_HOME: directory },
         modelRuntimeEnv: { DAILY_BRIEF_HOME: directory }
       });
       const archived = await readFile(result.archivePath, "utf8");
