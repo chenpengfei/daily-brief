@@ -36,7 +36,7 @@ describe("workflow CLI commands", () => {
     await runCli(["version"], captureOutput(output), {});
     await runCli(["--version"], captureOutput(output), {});
 
-    expect(output).toEqual(["daily-brief 0.1.3", "daily-brief 0.1.3"]);
+    expect(output).toEqual(["daily-brief 0.1.4", "daily-brief 0.1.4"]);
   });
 
   it("fails clearly for removed public workflow and configuration commands", async () => {
