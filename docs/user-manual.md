@@ -61,7 +61,7 @@ Agent Stages require an LLM Provider Configuration before real Daily Brief gener
 daily-brief setup
 ```
 
-Use the setup wizard to choose the provider, model, credential name, and optional login/API key storage path. The credential name is a stable label, such as `openai.default` or `env:OPENAI_API_KEY`, that lets `config.yaml` find the secret in `auth.json` or in the shell environment. Do not put secrets in `sources.yaml` or committed project files.
+Use the setup wizard to choose the provider, model, credential name, and optional login/API key storage path. The credential name is a stable label, such as `openai.default`, that lets `config.yaml` find the secret in `auth.json`. Do not put secrets in `sources.yaml`, `config.yaml`, or committed project files.
 
 ## Configure Delivery
 
@@ -102,7 +102,7 @@ Use status after setup, after manual runs, or when diagnosing failures:
 daily-brief status
 ```
 
-Status output is the operational surface for collection, analysis, archive, and delivery health.
+Status output reports setup readiness, today's run state, active paths, system timezone, and the next suggested action. It is a local inspection command: it does not refresh OAuth, call an LLM, collect Sources, or send Discord notifications.
 
 ## Paths and Environment
 
@@ -110,10 +110,8 @@ The installed CLI uses user-home paths by default:
 
 - `DAILY_BRIEF_HOME`: configuration directory, default `~/.daily-brief`.
 - `DAILY_BRIEF_DATA_HOME`: generated data directory, default `~/.daily-brief/data`.
-- `DAILY_BRIEF_DISCORD_TEMPLATE_PATH`: optional Discord notification template override.
-- `DISCORD_WEBHOOK_URL`: optional Discord webhook URL. If `config.yaml` explicitly sets `delivery.enabled: false`, delivery stays disabled even when this environment variable is present.
 
-Repository checkouts may use a local `.env`; installed usage should normally rely on setup, user configuration files, and environment-backed credential references.
+Model access, Discord delivery, Source choices, and secrets are configured through `config.yaml`, `sources.yaml`, and `auth.json`, not environment variables.
 
 ## Upgrade
 

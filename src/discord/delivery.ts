@@ -55,7 +55,7 @@ async function sendDiscordContent(
   const webhookUrl = options.webhookUrl ?? resolveConfiguredWebhookUrl(options.env ?? process.env);
 
   if (!webhookUrl) {
-    return { status: "skipped", reason: "DISCORD_WEBHOOK_URL is not configured" };
+    return { status: "skipped", reason: "Discord delivery webhook is not configured" };
   }
 
   try {
@@ -106,10 +106,6 @@ export function resolveConfiguredWebhookUrl(env: Partial<Record<string, string |
 
   if (config?.enabled === false) {
     return undefined;
-  }
-
-  if (env.DISCORD_WEBHOOK_URL) {
-    return env.DISCORD_WEBHOOK_URL;
   }
 
   if (!config?.enabled || !config.webhookRef) {

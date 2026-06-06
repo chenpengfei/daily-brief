@@ -45,7 +45,7 @@ describe("Daily Brief model config", () => {
         {
           provider: "deepseek",
           model: "deepseek-chat",
-          credentialRef: "env:DEEPSEEK_API_KEY"
+          credentialRef: "deepseek.default"
         },
         configPath
       );
@@ -70,6 +70,23 @@ describe("Daily Brief model config", () => {
       );
 
       expect(() => readModelConfig(configPath)).toThrow("must not contain secrets");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects environment-backed credential refs in config.yaml", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-model-config-"));
+    const configPath = join(directory, "config.yaml");
+
+    try {
+      await writeFile(
+        configPath,
+        ["model:", "  provider: openai", "  model: gpt-4.1-mini", "  credentialRef: env:PROVIDER_API_KEY"].join("\n"),
+        "utf8"
+      );
+
+      expect(() => readModelConfig(configPath)).toThrow("stored credential name");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

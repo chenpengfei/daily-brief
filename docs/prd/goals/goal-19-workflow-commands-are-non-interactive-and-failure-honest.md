@@ -18,9 +18,9 @@ Workflow commands run safely under external schedulers, support date-based repla
 
 ### Includes
 
-- Non-interactive `collect`, `generate`, optional `deliver`, `run-once`, and `status`.
+- Non-interactive `run-once` and `status`.
 - `--date YYYY-MM-DD` for workflow commands.
-- Date resolution using configured timezone.
+- Default date resolution using the runtime system timezone.
 - Partial collection failure propagation into generation and Source Coverage.
 - Full collection failure behavior.
 - Analysis Failure behavior with no normal Brief Archive entry.
@@ -43,7 +43,7 @@ Workflow commands run safely under external schedulers, support date-based repla
   Evidence: CLI failure test.
 
 - Given `--date YYYY-MM-DD`,
-  When `collect`, `generate`, `deliver`, or `run-once` runs,
+  When `run-once` runs,
   Then the command uses that date's Source Item Store, Agent Run Artifact path, Brief Archive path, and optional delivery target when Delivery is enabled,
   Evidence: CLI date option tests.
 

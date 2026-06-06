@@ -184,7 +184,7 @@ The Operational CLI should guide model configuration through `daily-brief setup`
 
 The wizard should default to the recommended `openai-codex` / `gpt-5.5` path while allowing alternatives such as OpenAI API, DeepSeek, and OpenAI-compatible custom endpoints.
 
-Provider secrets and OAuth tokens belong in the Model Credential Store or the runtime environment, not in `config/sources.yaml` and not in committed project configuration. A development `.env` may be supported as a compatibility convenience, but it is not the installed CLI's primary credential store.
+Provider secrets and OAuth tokens belong in the Model Credential Store, not in `config/sources.yaml`, `config.yaml`, environment variables, or committed project configuration.
 
 For ChatGPT/Codex OAuth, the CLI should guide the user through the provider-specific login flow exposed by Pi. Daily Brief may import existing Codex CLI credentials read-only if supported, but it must not refresh or overwrite the shared Codex CLI auth file.
 
@@ -196,7 +196,7 @@ The npm-compatible CLI package may be distributed from GitHub source, GitHub Rel
 
 After installation, the primary first-use path should be `daily-brief setup`, an interactive Setup Wizard that completes the necessary user configuration in one guided flow. The Setup Wizard should create files, choose and authenticate an LLM Provider, initialize Sources from the packaged example, and configure delivery settings when the user wants Discord Delivery.
 
-The Setup Wizard should detect the system timezone, ask the user to confirm or change it, and store the selected timezone in `config.yaml`. If timezone detection is unavailable, it should default to `Asia/Shanghai`.
+Daily Brief uses the runtime system timezone as the only timezone fact for default workflow dates. Setup should not prompt for or write timezone configuration.
 
 The first version should keep Brief Language fixed as `zh` while preserving important English technical terms, project names, repository names, paper titles, and source titles. `config.yaml` may include `brief.language: zh` for future expansion, but setup should not offer multi-language generation in the first version.
 
@@ -236,24 +236,19 @@ model:
   credentialRef: openai-codex.default
 
 delivery:
-  discord:
-    enabled: true
-    webhookRef: discord.default
-
-paths:
-  dataHome: null
+  enabled: true
+  webhookRef: discord.default
 
 brief:
   language: zh
-  timezone: Asia/Shanghai
   maxSignals: 5
 ```
 
-The real credentials referenced by `credentialRef` and `webhookRef` belong in `auth.json` or the runtime environment. The Source Registry belongs in `sources.yaml`.
+The real credentials referenced by `credentialRef` and `webhookRef` belong in `auth.json`. The Source Registry belongs in `sources.yaml`.
 
-`auth.json` should be treated as a Setup Wizard-managed credential store rather than a hand-edited configuration file for normal interactive use. The Setup Wizard should write OAuth tokens, API keys, Discord webhooks, provider metadata, and environment-backed credential references into this store. Non-interactive automation may create the file directly. Status output may show whether a credential exists, what provider it belongs to, and whether it appears refreshable, but must not print secret values. The file should be created with restrictive permissions where the platform supports it.
+`auth.json` should be treated as a Setup Wizard-managed credential store rather than a hand-edited configuration file for normal interactive use. The Setup Wizard should write OAuth tokens, API keys, Discord webhooks, and provider metadata into this store. Non-interactive automation may create the file directly. Status output may show whether a credential exists, what provider it belongs to, and whether it appears refreshable, but must not print secret values. The file should be created with restrictive permissions where the platform supports it.
 
-Credential references in `config.yaml` should use stable names such as `provider.name`, for example `deepseek.default`, `openai-codex.default`, or `discord.default`. Environment-backed credentials should use `env:NAME`. `auth.json` should store credentials by these stable reference names, including their type and provider metadata, while status commands display the reference name and readiness rather than the secret value.
+Credential references in `config.yaml` should use stable stored names such as `provider.name`, for example `deepseek.default`, `openai-codex.default`, or `discord.default`. `auth.json` should store credentials by these stable reference names, including their type and provider metadata, while status commands display the reference name and readiness rather than the secret value.
 
 `auth.json` should support multiple credentials across model providers and Delivery Channels. `config.yaml` chooses the active references for the current run, while unused credentials may remain available for later provider switching. Focused logout/delete commands should remove only the selected credential reference unless the user explicitly asks to clear more.
 
@@ -292,7 +287,7 @@ Collection failures should be classified before generation. An unreadable Source
 
 Brief Archive entries should use a stable date path and be overwritten directly when the same date is regenerated. Agent Run Artifacts carry the audit history for generation attempts; the Markdown Brief Archive represents the current reader-facing version for that date.
 
-Workflow commands should default to the current local date, using the timezone configured in `config.yaml`, and `run-once` should support `--date YYYY-MM-DD` for replay, debugging, and manual reruns.
+Workflow commands should default to the current date in the runtime system timezone, and `run-once` should support `--date YYYY-MM-DD` for replay, debugging, and manual reruns.
 
 `status` should include both configuration readiness and recent run state. Configuration readiness should report the active home and data directories, Source Registry parse status, selected model provider and model, credential readiness without secret values, Delivery Channel enabled/disabled state, and data directory writability. Recent run state should summarize the latest known collection, generation, Brief Archive, Agent Run Artifact, and delivery result from the generated data directory when present.
 
@@ -307,7 +302,7 @@ The Operational CLI should provide setup and configuration commands that create 
 - configure Delivery Channels such as Discord
 - print paths and status without revealing secrets
 
-Environment variables should remain available for supported runtime overrides, but Source Registry location should be derived from `DAILY_BRIEF_HOME` rather than a separate Source Registry path variable.
+Environment variables are limited to supported path overrides: `DAILY_BRIEF_HOME` for user configuration and `DAILY_BRIEF_DATA_HOME` for generated data. Source Registry location should be derived from `DAILY_BRIEF_HOME` rather than a separate Source Registry path variable.
 
 Setup must be explicit and interactive. `daily-brief setup` should create the user configuration directory, initialize `config.yaml`, initialize `sources.yaml` from the repository example or an embedded example, create an empty credential store such as `auth.json` with restrictive permissions where possible, create the generated data directory, guide LLM Provider selection and authentication, and configure delivery settings when requested. Reconfiguration should stay simple: preserve existing files by default, directly overwrite selected non-secret config files only when the user confirms replacement, and never delete credentials or generated data. `setup` does not accept a force-overwrite flag.
 

@@ -6,9 +6,7 @@ import {
   type OAuthLoginCallbacks
 } from "@earendil-works/pi-ai/oauth";
 import {
-  envNameFromCredentialRef,
   getCredential,
-  isEnvCredentialRef,
   putCredential,
   readCredentialStore,
   readModelConfig,
@@ -59,7 +57,7 @@ export function readModelRuntimeConfig(
   const paths = resolveDailyBriefPaths(env);
   const configPath = options.configPath ?? paths.configPath;
   const authPath = options.authPath ?? paths.authPath;
-  const config = readEnvModelConfig(env) ?? (existsSync(configPath) ? readModelConfig(configPath) : undefined);
+  const config = existsSync(configPath) ? readModelConfig(configPath) : undefined;
 
   if (!config) {
     return {
@@ -71,7 +69,7 @@ export function readModelRuntimeConfig(
     };
   }
 
-  const issues = credentialIssues(config.provider, config.credentialRef, env, authPath);
+  const issues = credentialIssues(config.provider, config.credentialRef, authPath);
 
   return {
     provider: config.provider,
@@ -96,11 +94,6 @@ export async function resolveModelApiKey(
 
   if (!credentialRef) {
     throw new Error(`credentialRef is required for ${config.provider}`);
-  }
-
-  if (isEnvCredentialRef(credentialRef)) {
-    const envName = envNameFromCredentialRef(credentialRef);
-    return env[envName]?.trim();
   }
 
   const authPath = options.authPath ?? resolveDailyBriefPaths(env).authPath;
@@ -205,7 +198,6 @@ export function statusModelCredentials(
 function credentialIssues(
   provider: ModelProvider,
   credentialRef: string | undefined,
-  env: ModelRuntimeEnv,
   authPath: string
 ): string[] {
   if (provider === "faux") {
@@ -214,11 +206,6 @@ function credentialIssues(
 
   if (!credentialRef) {
     return [`credentialRef is required for ${provider}`];
-  }
-
-  if (isEnvCredentialRef(credentialRef)) {
-    const envName = envNameFromCredentialRef(credentialRef);
-    return env[envName]?.trim() ? [] : [`${envName} is required for credentialRef ${credentialRef}`];
   }
 
   const credential = getCredential(credentialRef, authPath);
@@ -232,92 +219,6 @@ function credentialIssues(
   }
 
   return [];
-}
-
-function readEnvModelConfig(env: ModelRuntimeEnv):
-  | {
-      provider: ModelProvider;
-      model: string;
-      credentialRef?: string;
-      baseUrl?: string;
-    }
-  | undefined {
-  const provider = env.DAILY_BRIEF_MODEL_PROVIDER?.trim();
-
-  if (!provider) {
-    return undefined;
-  }
-
-  const normalizedProvider = normalizeProvider(provider, env);
-
-  return {
-    provider: normalizedProvider,
-    model: env.DAILY_BRIEF_MODEL?.trim() || defaultModelForProvider(normalizedProvider),
-    ...(env.DAILY_BRIEF_MODEL_BASE_URL?.trim() ? { baseUrl: env.DAILY_BRIEF_MODEL_BASE_URL.trim() } : {}),
-    ...readEnvCredentialRef(env, normalizedProvider)
-  };
-}
-
-function normalizeProvider(value: string, env: ModelRuntimeEnv): ModelProvider {
-  const provider = value.trim().toLowerCase();
-
-  if (provider === "codex" || provider === "hermes") {
-    return "openai-codex";
-  }
-
-  if (provider === "faux") {
-    if (env.DAILY_BRIEF_ALLOW_FAUX_PROVIDER === "true") {
-      return provider;
-    }
-
-    throw new Error("DAILY_BRIEF_MODEL_PROVIDER=faux is only allowed when DAILY_BRIEF_ALLOW_FAUX_PROVIDER=true");
-  }
-
-  if (provider === "openai-codex" || provider === "openai" || provider === "deepseek" || provider === "openai-compatible") {
-    return provider;
-  }
-
-  throw new Error(`Unsupported DAILY_BRIEF_MODEL_PROVIDER: ${value}`);
-}
-
-function defaultModelForProvider(provider: ModelProvider): string {
-  if (provider === "openai-codex") {
-    return "gpt-5.5";
-  }
-
-  if (provider === "openai") {
-    return "gpt-4.1-mini";
-  }
-
-  if (provider === "deepseek") {
-    return "deepseek-chat";
-  }
-
-  if (provider === "openai-compatible") {
-    return "openai-compatible-model";
-  }
-
-  return "faux-daily-brief-renderer";
-}
-
-function defaultCredentialRefForProvider(provider: ModelProvider): string | undefined {
-  if (provider === "faux") {
-    return undefined;
-  }
-
-  if (provider === "openai") {
-    return "env:OPENAI_API_KEY";
-  }
-
-  if (provider === "deepseek") {
-    return "env:DEEPSEEK_API_KEY";
-  }
-
-  if (provider === "openai-compatible") {
-    return "env:OPENAI_API_KEY";
-  }
-
-  return "openai-codex.default";
 }
 
 function persistRefreshedOAuthCredential(
@@ -335,17 +236,6 @@ function persistRefreshedOAuthCredential(
     credentials
   };
   writeCredentialStore(store, authPath);
-}
-
-function readEnvCredentialRef(
-  env: ModelRuntimeEnv,
-  provider: ModelProvider
-): { credentialRef?: string } {
-  const credentialRef =
-    env.DAILY_BRIEF_MODEL_CREDENTIAL_REF?.trim() ||
-    defaultCredentialRefForProvider(provider);
-
-  return credentialRef ? { credentialRef } : {};
 }
 
 function promptForOAuth(io: ModelLoginIo, message: string): Promise<string> {

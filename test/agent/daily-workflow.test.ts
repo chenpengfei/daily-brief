@@ -44,6 +44,7 @@ describe("daily workflow orchestration", () => {
         ].join("\n"),
         "utf8"
       );
+      await writeFauxModelConfig(directory);
 
       const firstRun = await runOnce({
         date,
@@ -52,7 +53,7 @@ describe("daily workflow orchestration", () => {
         archiveRoot,
         agentRunRoot,
         discordEnv: { DAILY_BRIEF_HOME: directory },
-        modelRuntimeEnv: fauxRuntimeEnv()
+        modelRuntimeEnv: { DAILY_BRIEF_HOME: directory }
       });
       const secondRun = await runOnce({
         date,
@@ -61,7 +62,7 @@ describe("daily workflow orchestration", () => {
         archiveRoot,
         agentRunRoot,
         discordEnv: { DAILY_BRIEF_HOME: directory },
-        modelRuntimeEnv: fauxRuntimeEnv()
+        modelRuntimeEnv: { DAILY_BRIEF_HOME: directory }
       });
       const stored = await readSourceItems(date, sourceItemRoot);
       const archived = await readFile(firstRun.archivePath, "utf8");
@@ -92,7 +93,7 @@ describe("daily workflow orchestration", () => {
       expect(parsedArtifact.inputRefs.sourceItemIds[0]).toContain("fixture-blog:");
       expect(artifact).not.toContain("Render this Source-grounded Daily Brief");
       expect(artifact).not.toContain("transcript");
-      expect(firstRun.delivery).toEqual({ status: "skipped", reason: "DISCORD_WEBHOOK_URL is not configured" });
+      expect(firstRun.delivery).toEqual({ status: "skipped", reason: "Discord delivery webhook is not configured" });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -121,11 +122,17 @@ describe("daily workflow orchestration", () => {
         date,
         sourceItemRoot
       );
-      const generated = await generateOnce({ date, sourceItemRoot, archiveRoot, modelRuntimeEnv: fauxRuntimeEnv() });
+      await writeFauxModelConfig(directory);
+      const generated = await generateOnce({
+        date,
+        sourceItemRoot,
+        archiveRoot,
+        modelRuntimeEnv: { DAILY_BRIEF_HOME: directory }
+      });
       const delivery = await deliverOnce({ date, sourceItemRoot, archiveRoot, discordEnv: { DAILY_BRIEF_HOME: directory } });
 
       expect(generated.archivePath).toBe(join(archiveRoot, "2026", "05", "2026-05-28.md"));
-      expect(delivery).toEqual({ status: "skipped", reason: "DISCORD_WEBHOOK_URL is not configured" });
+      expect(delivery).toEqual({ status: "skipped", reason: "Discord delivery webhook is not configured" });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -182,13 +189,14 @@ describe("daily workflow orchestration", () => {
         ].join("\n"),
         "utf8"
       );
+      await writeFauxModelConfig(directory);
 
       const result = await runOnce({
         date: new Date("2026-05-31T07:00:00.000Z"),
         sourceRegistryPath: registryPath,
         sourceItemRoot: join(directory, "source-items"),
         archiveRoot,
-        modelRuntimeEnv: fauxRuntimeEnv()
+        modelRuntimeEnv: { DAILY_BRIEF_HOME: directory }
       });
 
       expect(result.coreFailure).toMatchObject({ kind: "no-usable-source-items" });
@@ -242,6 +250,7 @@ describe("daily workflow orchestration", () => {
         ].join("\n"),
         "utf8"
       );
+      await writeFauxModelConfig(directory);
 
       const result = await runOnce({
         date,
@@ -250,7 +259,7 @@ describe("daily workflow orchestration", () => {
         sourceItemRoot,
         archiveRoot,
         agentRunRoot,
-        modelRuntimeEnv: fauxRuntimeEnv()
+        modelRuntimeEnv: { DAILY_BRIEF_HOME: directory }
       });
       const archived = await readFile(result.archivePath, "utf8");
       const artifact = JSON.parse(await readFile(String(result.agentRunArtifactPath), "utf8"));
@@ -291,9 +300,15 @@ describe("daily workflow orchestration", () => {
         sourceItemRoot
       );
 
-      await expect(generateOnce({ date, sourceItemRoot, archiveRoot, modelRuntimeEnv: fauxRuntimeEnv() })).rejects.toThrow(
-        "Source-grounding audit failed"
-      );
+      await writeFauxModelConfig(directory);
+      await expect(
+        generateOnce({
+          date,
+          sourceItemRoot,
+          archiveRoot,
+          modelRuntimeEnv: { DAILY_BRIEF_HOME: directory }
+        })
+      ).rejects.toThrow("Source-grounding audit failed");
       await expect(readFile(join(archiveRoot, "2026", "05", "2026-05-28.md"), "utf8")).rejects.toThrow("ENOENT");
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -301,10 +316,10 @@ describe("daily workflow orchestration", () => {
   });
 });
 
-function fauxRuntimeEnv() {
-  return {
-    DAILY_BRIEF_ALLOW_FAUX_PROVIDER: "true",
-    DAILY_BRIEF_MODEL_PROVIDER: "faux",
-    DAILY_BRIEF_MODEL: "faux-daily-brief-renderer"
-  };
+async function writeFauxModelConfig(directory: string): Promise<void> {
+  await writeFile(
+    join(directory, "config.yaml"),
+    ["model:", "  provider: faux", "  model: faux-daily-brief-renderer"].join("\n"),
+    "utf8"
+  );
 }

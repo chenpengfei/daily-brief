@@ -12,18 +12,15 @@ import {
   toApiKeyCredential,
   type ModelProvider
 } from "./agent/index.js";
-import { resolveConfiguredWebhookUrl } from "./discord/index.js";
 import {
   defaultModelConfig,
   dateFromDateKey,
   formatDateKey,
   formatSourceRegistry,
-  isEnvCredentialRef,
   loadSourceRegistry,
   putCredential,
   readDeliveryConfig,
   readDailyBriefConfig,
-  readConfiguredTimezone,
   getCredential,
   resolveDailyBriefPaths,
   setSourceEnabled,
@@ -34,6 +31,8 @@ import {
   type DailyBriefModelConfig
 } from "./config/index.js";
 import { getOperationalStatus } from "./workflow/index.js";
+
+type OperationalStatusReport = Awaited<ReturnType<typeof getOperationalStatus>>;
 
 export interface CliIo {
   stdout(line: string): void;
@@ -70,11 +69,6 @@ const consoleIo: CliIo = {
 
 export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv = process.env): Promise<void> {
   const [command, subcommand, value] = args;
-  const workflowFlags = parseFlags(args.slice(1));
-  const options = {
-    ...optionsFromEnv(env),
-    ...readWorkflowDateOption(workflowFlags, env)
-  };
 
   if (!command || command === "help" || command === "--help" || command === "-h") {
     printHelp(io);
@@ -87,6 +81,11 @@ export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv 
   }
 
   if (command === "run-once") {
+    const workflowFlags = parseFlags(args.slice(1));
+    const options = {
+      ...optionsFromEnv(env),
+      ...readWorkflowDateOption(workflowFlags)
+    };
     await assertWorkflowConfigured(options.sourceRegistryPath);
     io.stdout("Daily Brief run started");
     io.stdout(`Date: ${options.dateKey}`);
@@ -117,17 +116,18 @@ export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv 
   }
 
   if (command === "status") {
-    const status = await getOperationalStatus(options);
-    io.stdout(`${status.health}: ${status.message}`);
-
-    for (const failure of status.materialPartialFailures) {
-      io.stdout(`- ${failure}`);
+    if (args.length > 1) {
+      throw new Error("daily-brief status does not accept flags.");
     }
 
+    const options = optionsFromEnv(env);
+    const status = await getOperationalStatus(options);
+    printOperationalStatus(status, io);
     return;
   }
 
   if (command === "sources") {
+    const options = optionsFromEnv(env);
     await handleSourcesCommand(subcommand, value, io, options.sourceRegistryPath);
     return;
   }
@@ -170,7 +170,60 @@ function formatDeliveryStatus(delivery: { status: string; reason?: string }): st
   return `${delivery.status}${delivery.reason ? ` (${delivery.reason})` : ""}`;
 }
 
-function readWorkflowDateOption(flags: Record<string, string | undefined>, env: CliEnv): { date: Date; dateKey: string } {
+function printOperationalStatus(status: OperationalStatusReport, io: CliIo): void {
+  io.stdout("Daily Brief status");
+  io.stdout(`Health: ${status.health} - ${status.message}`);
+  io.stdout(`Date: ${status.dateKey}`);
+  io.stdout(`System timezone: ${status.systemTimezone}`);
+  io.stdout(`Home: ${status.paths.home}`);
+  io.stdout(`Data: ${status.paths.dataHome}`);
+  io.stdout("");
+  io.stdout("Setup readiness");
+  io.stdout(formatStatusCheck("Config", status.setup.config));
+  io.stdout(formatSourceRegistryCheck(status.setup.sourceRegistry));
+  io.stdout(formatModelCheck(status.setup.model));
+  io.stdout(formatStatusCheck("Delivery", status.setup.delivery));
+  io.stdout(formatStatusCheck("Data", status.setup.data));
+  io.stdout("");
+  io.stdout("Today run state");
+  io.stdout(formatStatusCheck("Source Items", status.today.sourceItems));
+  io.stdout(formatStatusCheck("Brief Archive", status.today.briefArchive));
+  io.stdout(formatStatusCheck("Agent Run Artifacts", status.today.agentRunArtifacts));
+  io.stdout("");
+  io.stdout(`Next: ${status.nextAction}`);
+
+  for (const failure of status.materialPartialFailures) {
+    io.stdout(`- ${failure}`);
+  }
+}
+
+function formatStatusCheck(label: string, check: { state: string; label: string; path?: string; detail?: string }): string {
+  const detail = check.detail ? ` - ${check.detail}` : "";
+  const path = check.path ? ` (${check.path})` : "";
+  return `- ${label}: ${check.state} - ${check.label}${detail}${path}`;
+}
+
+function formatSourceRegistryCheck(
+  check: OperationalStatusReport["setup"]["sourceRegistry"]
+): string {
+  const counts =
+    typeof check.enabledCount === "number" && typeof check.totalCount === "number"
+      ? ` - ${check.enabledCount}/${check.totalCount} enabled`
+      : "";
+  const detail = check.detail && !counts.includes(check.detail) ? ` - ${check.detail}` : "";
+  const path = check.path ? ` (${check.path})` : "";
+  return `- Source Registry: ${check.state} - ${check.label}${counts}${detail}${path}`;
+}
+
+function formatModelCheck(check: OperationalStatusReport["setup"]["model"]): string {
+  const selected = check.provider && check.model ? ` - ${check.provider}/${check.model}` : "";
+  const credential = check.credentialRef ? ` - credential ${check.credentialRef}` : "";
+  const detail = check.detail ? ` - ${check.detail}` : "";
+  const path = check.path ? ` (${check.path})` : "";
+  return `- Model: ${check.state} - ${check.label}${selected}${credential}${detail}${path}`;
+}
+
+function readWorkflowDateOption(flags: Record<string, string | undefined>): { date: Date; dateKey: string } {
   if (flags.date) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(flags.date)) {
       throw new Error("--date must use YYYY-MM-DD");
@@ -180,8 +233,7 @@ function readWorkflowDateOption(flags: Record<string, string | undefined>, env: 
   }
 
   const now = new Date();
-  const paths = resolveDailyBriefPaths(env);
-  const timezone = readConfiguredTimezone(paths.configPath) ?? env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return { date: now, dateKey: formatDateKey(now, timezone) };
 }
@@ -285,11 +337,6 @@ async function handleSetupCommand(args: string[], io: CliIo, env: CliEnv): Promi
   requireInteractiveSetup(io);
   const paths = resolveDailyBriefPaths(env);
   const existingConfig = readDailyBriefConfig(paths.configPath);
-  const timezone = await promptWithDefault(
-    io,
-    "Timezone",
-    readConfiguredTimezone(paths.configPath) ?? env.TZ?.trim() ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC"
-  );
 
   await mkdir(paths.home, { recursive: true });
   await mkdir(paths.sourceItemRoot, { recursive: true });
@@ -298,7 +345,6 @@ async function handleSetupCommand(args: string[], io: CliIo, env: CliEnv): Promi
 
   await writeSetupBaseConfig(paths.configPath, {
     ...existingConfig,
-    timezone,
     brief: normalizeBriefConfig(existingConfig.brief)
   });
 
@@ -339,7 +385,6 @@ async function handleSetupCommand(args: string[], io: CliIo, env: CliEnv): Promi
   const delivery = readDeliveryConfig(paths.configPath);
   io.stdout(`Daily Brief home: ${paths.home}`);
   io.stdout(`Daily Brief data: ${paths.dataHome}`);
-  io.stdout(`Timezone: ${timezone}`);
   io.stdout(`Source Registry: ${paths.sourceRegistryPath}`);
   io.stdout(`Model: ${readiness.provider}/${readiness.model}`);
   io.stdout(`Model credential: ${readiness.ready ? "configured" : "missing"}`);
@@ -385,7 +430,7 @@ async function configureModelThroughSetup(io: CliIo, env: CliEnv): Promise<void>
   );
   const model = await promptWithDefault(io, "Model", current.provider === provider ? current.model : defaultModelForProvider(provider));
   io.stdout(
-    "Credential name identifies where Daily Brief finds the model secret. Use the default unless you manage multiple credentials; env:NAME reads an environment variable."
+    "Credential name identifies where Daily Brief finds the model secret in auth.json. Use the default unless you manage multiple credentials."
   );
   const credentialRef = await promptWithDefault(
     io,
@@ -441,28 +486,6 @@ async function maybeConfigureModelCredential(input: {
       input.io.stdout(`Logged in credential: ${input.credentialRef}`);
     } else {
       input.io.stdout("Model credential: missing");
-    }
-    return;
-  }
-
-  if (isEnvCredentialRef(input.credentialRef)) {
-    const hasEnvValue = Boolean(input.env[input.credentialRef.slice("env:".length)]?.trim());
-    if (hasEnvValue) {
-      input.io.stdout("Model credential: configured from environment");
-      return;
-    }
-
-    if (!(await promptYesNo(input.io, "Store API key in credential store instead of using the environment?", false))) {
-      input.io.stdout("Model credential: missing until the environment variable is set");
-      return;
-    }
-
-    const storedRef = await promptWithDefault(input.io, "Stored credential name", `${input.provider}.default`);
-    const apiKey = await promptWithDefault(input.io, "API key input may be visible in this terminal. API key", "");
-    if (apiKey) {
-      putCredential(storedRef, toApiKeyCredential(input.provider, apiKey), paths.authPath);
-      writeModelConfig({ ...readDailyBriefConfig(paths.configPath).model!, credentialRef: storedRef }, paths.configPath);
-      input.io.stdout(`Stored credential: ${storedRef}`);
     }
     return;
   }
@@ -642,15 +665,15 @@ function defaultCredentialRef(provider: ModelProvider): string | undefined {
   }
 
   if (provider === "openai") {
-    return "env:OPENAI_API_KEY";
+    return "openai.default";
   }
 
   if (provider === "deepseek") {
-    return "env:DEEPSEEK_API_KEY";
+    return "deepseek.default";
   }
 
   if (provider === "openai-compatible") {
-    return "env:OPENAI_API_KEY";
+    return "openai-compatible.default";
   }
 
   return defaultModelConfig().credentialRef;
@@ -667,78 +690,19 @@ async function promptWithDefault(io: CliIo, label: string, defaultValue: string)
 
 function optionsFromEnv(env: CliEnv) {
   const paths = resolveDailyBriefPaths(env);
-  const discordWebhookUrl = resolveConfiguredWebhookUrl(env);
 
   return {
+    env,
+    dataHome: paths.dataHome,
+    configPath: paths.configPath,
+    authPath: paths.authPath,
     sourceRegistryPath: paths.sourceRegistryPath,
     sourceItemRoot: paths.sourceItemRoot,
     agentRunRoot: paths.agentRunRoot,
     archiveRoot: paths.briefArchiveRoot,
     modelRuntimeEnv: env,
-    discordEnv: env,
-    ...(discordWebhookUrl ? { discordWebhookUrl } : {}),
-    ...(env.DAILY_BRIEF_DISCORD_TEMPLATE_PATH ? { discordTemplatePath: env.DAILY_BRIEF_DISCORD_TEMPLATE_PATH } : {})
+    discordEnv: env
   };
-}
-
-export async function loadDotenvFile(path = ".env", env: CliEnv = process.env): Promise<void> {
-  let contents: string;
-
-  try {
-    contents = await readFile(path, "utf8");
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      return;
-    }
-
-    throw error;
-  }
-
-  for (const line of contents.split("\n")) {
-    const entry = parseDotenvLine(line);
-
-    if (!entry || env[entry.key] !== undefined) {
-      continue;
-    }
-
-    env[entry.key] = entry.value;
-  }
-}
-
-function parseDotenvLine(line: string): { key: string; value: string } | undefined {
-  const trimmed = line.trim();
-
-  if (trimmed.length === 0 || trimmed.startsWith("#")) {
-    return undefined;
-  }
-
-  const equalsIndex = trimmed.indexOf("=");
-
-  if (equalsIndex <= 0) {
-    return undefined;
-  }
-
-  const key = trimmed.slice(0, equalsIndex).trim();
-  const rawValue = trimmed.slice(equalsIndex + 1).trim();
-
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
-    return undefined;
-  }
-
-  return { key, value: unquoteDotenvValue(rawValue) };
-}
-
-function unquoteDotenvValue(value: string): string {
-  if (value.length >= 2) {
-    const quote = value[0];
-    const last = value[value.length - 1];
-
-    if ((quote === "\"" || quote === "'") && last === quote) {
-      return value.slice(1, -1);
-    }
-  }
-
-  return value;
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
@@ -772,7 +736,6 @@ isCliEntrypoint(process.argv[1])
       return false;
     }
 
-    await loadDotenvFile();
     await runCli(process.argv.slice(2));
     return true;
   })

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../../src/cli.js";
+import { formatDateKey } from "../../src/config/index.js";
 
 describe("workflow CLI commands", () => {
   afterEach(() => {
@@ -69,6 +70,7 @@ describe("workflow CLI commands", () => {
 
     try {
       await mkdir(archiveDirectory, { recursive: true });
+      await writeFauxModelConfig(directory);
       await writeFile(registryPath, "sources: []\n", "utf8");
       await writeFile(archivePath, `# Daily Brief - ${currentDate()}\n`, "utf8");
 
@@ -77,10 +79,18 @@ describe("workflow CLI commands", () => {
         DAILY_BRIEF_DATA_HOME: directory
       });
 
-      expect(output.join("\n")).toContain(`success: Daily Brief archive exists for ${currentDate()}.`);
+      expect(output.join("\n")).toContain(`Health: success - Daily Brief archive exists for ${currentDate()}.`);
+      expect(output.join("\n")).toContain(`Source Registry: ok - Source Registry valid - 0/0 enabled (${registryPath})`);
+      expect(output.join("\n")).toContain(`Brief Archive: ok - Daily Brief archive found (${archivePath})`);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it("does not accept date flags for status", async () => {
+    await expect(runCli(["status", "--date", "2026-05-28"], captureOutput([]), {})).rejects.toThrow(
+      "daily-brief status does not accept flags"
+    );
   });
 
   it("runs a daily workflow through configured roots", async () => {
@@ -89,12 +99,12 @@ describe("workflow CLI commands", () => {
     const output: string[] = [];
 
     try {
+      await writeFauxModelConfig(directory);
       await writeFixtureRegistry(directory, registryPath);
 
       await runCli(["run-once"], captureOutput(output), {
         DAILY_BRIEF_HOME: directory,
-        DAILY_BRIEF_DATA_HOME: directory,
-        ...fauxRuntimeEnv()
+        DAILY_BRIEF_DATA_HOME: directory
       });
 
       const archiveLine = output.find((line) => line.startsWith("Daily Brief archived: "));
@@ -116,23 +126,22 @@ describe("workflow CLI commands", () => {
     }
   });
 
-  it("does not use DISCORD_WEBHOOK_URL when config disables delivery", async () => {
+  it("does not treat legacy DISCORD_WEBHOOK_URL env as delivery configuration", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-disabled-delivery-"));
     const registryPath = join(directory, "sources.yaml");
     const output: string[] = [];
 
     try {
-      await writeFile(join(directory, "config.yaml"), "delivery:\n  enabled: false\n", "utf8");
+      await writeFauxModelConfig(directory);
       await writeFixtureRegistry(directory, registryPath);
 
       await runCli(["run-once", "--date", "2026-06-03"], captureOutput(output), {
         DAILY_BRIEF_HOME: directory,
         DAILY_BRIEF_DATA_HOME: directory,
-        DISCORD_WEBHOOK_URL: "https://discord.example/should-not-send",
-        ...fauxRuntimeEnv()
+        DISCORD_WEBHOOK_URL: "https://discord.example/legacy-webhook"
       });
 
-      expect(output.join("\n")).toContain("Discord delivery: skipped (DISCORD_WEBHOOK_URL is not configured)");
+      expect(output.join("\n")).toContain("Discord delivery: skipped (Discord delivery webhook is not configured)");
       expect(output.join("\n")).not.toContain("fetch failed");
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -163,12 +172,12 @@ describe("workflow CLI commands", () => {
     const output: string[] = [];
 
     try {
+      await writeFauxModelConfig(directory);
       await writeFixtureRegistry(directory, registryPath);
 
       await runCli(["run-once", "--date", "2026-05-28"], captureOutput(output), {
         DAILY_BRIEF_HOME: directory,
-        DAILY_BRIEF_DATA_HOME: directory,
-        ...fauxRuntimeEnv()
+        DAILY_BRIEF_DATA_HOME: directory
       });
 
       expect(output.find((line) => line.startsWith("Daily Brief archived: "))).toContain(
@@ -180,30 +189,33 @@ describe("workflow CLI commands", () => {
     }
   });
 
-  it("uses configured timezone for default workflow date paths", async () => {
+  it("uses the system timezone for default workflow date paths", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-timezone-"));
     const registryPath = join(directory, "sources.yaml");
     const output: string[] = [];
+    const now = new Date("2026-05-30T16:30:00.000Z");
+    const expectedDateKey = formatDateKey(now, Intl.DateTimeFormat().resolvedOptions().timeZone);
 
     try {
       vi.useFakeTimers();
-      vi.setSystemTime(new Date("2026-05-30T16:30:00.000Z"));
-      await writeFile(join(directory, "config.yaml"), "timezone: Asia/Shanghai\n", "utf8");
+      vi.setSystemTime(now);
+      await writeFauxModelConfig(directory, ["timezone: Pacific/Kiritimati"]);
       await writeFixtureRegistry(directory, registryPath);
 
       await runCli(["run-once"], captureOutput(output), {
         DAILY_BRIEF_HOME: directory,
-        DAILY_BRIEF_DATA_HOME: directory,
-        ...fauxRuntimeEnv()
+        DAILY_BRIEF_DATA_HOME: directory
       });
 
       expect(output.find((line) => line.startsWith("Daily Brief archived: "))).toContain(
-        join(directory, "briefs", "2026", "05", "2026-05-31.md")
+        join(directory, "briefs", expectedDateKey.slice(0, 4), expectedDateKey.slice(5, 7), `${expectedDateKey}.md`)
       );
-      await expect(readdir(join(directory, "agent-runs", "2026", "05", "2026-05-31"))).resolves.toHaveLength(1);
-      await expect(readFile(join(directory, "source-items", "2026", "05", "2026-05-31.jsonl"), "utf8")).resolves.toContain(
-        "fixture-blog:item-1"
-      );
+      await expect(
+        readdir(join(directory, "agent-runs", expectedDateKey.slice(0, 4), expectedDateKey.slice(5, 7), expectedDateKey))
+      ).resolves.toHaveLength(1);
+      await expect(
+        readFile(join(directory, "source-items", expectedDateKey.slice(0, 4), expectedDateKey.slice(5, 7), `${expectedDateKey}.jsonl`), "utf8")
+      ).resolves.toContain("fixture-blog:item-1");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -231,8 +243,7 @@ describe("workflow CLI commands", () => {
       await expect(
         runCli(["run-once", "--date", "2026-05-31"], captureOutput([]), {
           DAILY_BRIEF_HOME: directory,
-          DAILY_BRIEF_DATA_HOME: directory,
-          ...fauxRuntimeEnv()
+          DAILY_BRIEF_DATA_HOME: directory
         })
       ).rejects.toThrow("Core Workflow Failure: no-usable-source-items");
       await expect(readFile(join(directory, "briefs", "2026", "05", "2026-05-31.md"), "utf8")).rejects.toThrow("ENOENT");
@@ -284,12 +295,17 @@ async function writeFixtureRegistry(directory: string, registryPath: string): Pr
   );
 }
 
-function fauxRuntimeEnv() {
-  return {
-    DAILY_BRIEF_ALLOW_FAUX_PROVIDER: "true",
-    DAILY_BRIEF_MODEL_PROVIDER: "faux",
-    DAILY_BRIEF_MODEL: "faux-daily-brief-renderer"
-  };
+async function writeFauxModelConfig(directory: string, extraLines: string[] = []): Promise<void> {
+  await writeFile(
+    join(directory, "config.yaml"),
+    [
+      "model:",
+      "  provider: faux",
+      "  model: faux-daily-brief-renderer",
+      ...extraLines
+    ].join("\n"),
+    "utf8"
+  );
 }
 
 function currentDate(): string {

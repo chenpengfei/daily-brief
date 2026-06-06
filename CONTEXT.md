@@ -37,7 +37,7 @@ The user-controlled operational choice of which LLM Provider and model the Daily
 _Avoid_: Source configuration, hard-coded provider, committed secret
 
 **User Configuration Directory**:
-The per-user location where an installed Daily Brief Agent stores personal runtime configuration files such as Source Registry, LLM Provider Configuration, and credential state. The project repository may include examples and defaults, but user-specific configuration belongs outside the repository and should remain separate from generated Daily Brief data.
+The per-user location where an installed Daily Brief Agent stores personal runtime configuration files such as Source Registry, LLM Provider Configuration, and credential state. The project repository may include examples and defaults, but user-specific configuration belongs outside the repository and should remain separate from generated Daily Brief data. Environment variables may choose the configuration and data roots, but business configuration and secrets belong in user files rather than environment variables.
 _Avoid_: Project config, committed registry, generated artifact store
 
 **User Data Directory**:
@@ -46,7 +46,7 @@ _Avoid_: User Configuration Directory, committed archive, cache-only scratch spa
 
 **Model Credential Store**:
 The user-level storage for LLM Provider secrets, Delivery Channel secrets, OAuth tokens, API keys, webhooks, and refreshable credentials used by Agent Stages and delivery. The Model Credential Store is separate from project configuration and Source Registry so credentials are not committed or mixed with collection scope.
-_Avoid_: Source Registry, committed config file, `.env` as primary storage, shared Codex CLI auth file
+_Avoid_: Source Registry, committed config file, environment variables for secrets, shared Codex CLI auth file
 
 **Structured Agent Output**:
 The machine-validated JSON output produced by an Agent Stage before any reader-facing Markdown is rendered. Structured Agent Output must reference existing Source Items and Signals explicitly; invalid JSON, missing required fields, or impossible citations make the run an Analysis Failure.
@@ -121,7 +121,7 @@ The Markdown structure for an MVP Daily Brief: title with date, Executive Summar
 _Avoid_: Link dump, opaque summary, unsupported research section
 
 **Daily Brief Cadence**:
-The recurring schedule for collection and delivery. The Daily Brief Agent collects Source updates once per day starting at 06:00 and pushes the Daily Brief through Discord Delivery at 07:00. On partial collection or analysis failure, delivery remains on time and the Daily Brief notes any material incompleteness; core workflow failure results in a failure notification rather than a false brief.
+The recurring schedule for collection and delivery. The Daily Brief Agent collects Source updates once per day starting at 06:00 and pushes the Daily Brief through Discord Delivery at 07:00 in the system timezone of the runtime environment. On partial collection or analysis failure, delivery remains on time and the Daily Brief notes any material incompleteness; core workflow failure results in a failure notification rather than a false brief.
 _Avoid_: Continuous polling, real-time alerts, ad hoc delivery
 
 **Manual Run**:
@@ -193,7 +193,7 @@ The short Discord Delivery format for a generated Daily Brief: date, a few headl
 _Avoid_: Full daily brief, feedback UI, control command
 
 **Operational CLI**:
-The installed terminal entry point for manually running, inspecting, and configuring Daily Brief operations. The Operational CLI exposes a small, stable, user-facing command surface; lower-level workflow phases may remain internal capabilities rather than direct user commands. It can run setup, manage Sources, trigger Manual Runs, inspect status, and expose stable commands that external schedulers may invoke.
+The installed terminal entry point for manually running, inspecting, and configuring Daily Brief operations. The Operational CLI exposes a small, stable, user-facing command surface; lower-level workflow phases may remain internal capabilities rather than direct user commands. It can run setup, manage Sources, trigger Manual Runs, inspect setup readiness and current run state, and expose stable commands that external schedulers may invoke.
 _Avoid_: Chat product, long-running gateway, Discord control surface, debug-only workflow step surface
 
 **Setup Wizard**:
