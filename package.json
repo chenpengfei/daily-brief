@@ -44,6 +44,7 @@
     "release:check": "npm test && npm run typecheck && npm run build && npm pack --dry-run",
     "release:human": "node scripts/human-release.mjs",
     "release:publish:dry-run": "npm publish --dry-run --access public",
+    "skills:verify-lock": "node scripts/verify-skills-lock.mjs",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

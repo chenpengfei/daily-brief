@@ -164,6 +164,13 @@ DAILY_BRIEF_HOME=/tmp/daily-brief-release-home-<id> DAILY_BRIEF_DATA_HOME=/tmp/d
 
 Before running the publish command, state the exact command and require an explicit human confirmation such as `confirm publish vX.Y.Z`. A generic `continue` is enough for preflight and recovery checks, but not enough for the irreversible publish step.
 
+If npm authentication is missing, expired, or likely to require a Security Key/browser flow, have the maintainer run and verify the official login flow before publication:
+
+```sh
+npm login --auth-type=web
+npm whoami
+```
+
 Final verification:
 
 ```sh
@@ -256,10 +263,12 @@ gh release view vX.Y.Z
 git status --short --branch
 ```
 
-If the tag was pushed but npm is still on the previous version and GitHub Release is absent, continue with browser/Security Key auth, not OTP:
+If the tag was pushed but npm is still on the previous version and GitHub Release is absent, refresh browser/Security Key auth before retrying the documented publish command:
 
 ```sh
-npm publish --access public --auth-type=web
+npm login --auth-type=web
+npm whoami
+npm publish --access public
 ```
 
 If an npm web login prompt appears, let npm open the browser when possible. If the command prints a login URL, show it to the maintainer and ask them to complete the browser/Security Key flow.

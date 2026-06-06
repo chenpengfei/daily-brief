@@ -46,10 +46,10 @@ describe("Human Release helper", () => {
     expect(result.stdout).not.toContain("OK preflight passed; no publication commands were run");
   });
 
-  it("publishes through browser auth instead of OTP", async () => {
+  it("publishes with the documented public access option", async () => {
     const workspace = await createWorkspace();
 
-    const result = runHumanRelease(workspace, "not-found", ["--publish", "--yes", "--keep-smoke-dir", "--issue", "38"]);
+    const result = runHumanRelease(workspace, "not-found", ["--publish", "--yes", "--issue", "38"]);
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("OK release completed: v0.1.0");
@@ -152,8 +152,8 @@ if [ "$1" = "view" ]; then
 fi
 if [ "$1" = "run" ] && [ "$2" = "release:check" ]; then exit 0; fi
 if [ "$1" = "publish" ]; then
-  if [ "$2" = "--access" ] && [ "$3" = "public" ] && [ "$4" = "--auth-type" ] && [ "$5" = "web" ]; then touch ".fake-npm-published"; exit 0; fi
-  echo "publish did not use browser auth: $*" >&2
+  if [ "$2" = "--access" ] && [ "$3" = "public" ] && [ "$4" = "" ]; then touch ".fake-npm-published"; exit 0; fi
+  echo "publish did not use documented public access options: $*" >&2
   exit 2
 fi
 if [ "$1" = "install" ] && [ "$2" = "--prefix" ]; then

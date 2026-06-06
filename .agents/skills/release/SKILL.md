@@ -81,11 +81,12 @@ When the user confirms Human Release:
 2. Ensure local `main` matches `origin/main`, the working tree is clean, and CI is green on the merged commit.
 3. Run preflight: `npm run release:human -- --version X.Y.Z`.
 4. If preflight blocks on npm authentication (`npm whoami` `E401`, expired login, missing credentials, or 2FA), actively guide the maintainer through npm login before continuing; do not merely say "authenticate npm". See [REFERENCE.md](REFERENCE.md).
-5. After explicit publish confirmation, run: `npm run release:human -- --version X.Y.Z --publish --yes --issue <issue>`.
-6. If npm 2FA blocks publish, recover with browser/Security Key auth (`npm publish --access public --auth-type=web`) instead of OTP, then resume from the exact remaining release step.
-7. Verify npm latest, GitHub Release, tag, and public install smoke.
-8. Comment final evidence on the Release Checklist Issue and release PR.
-9. Close the Release Checklist Issue only after the Closure Standard is satisfied.
+5. Before publication, verify browser/Security Key npm auth with `npm login --auth-type=web` when login is missing or expired, then `npm whoami`.
+6. After explicit publish confirmation, run: `npm run release:human -- --version X.Y.Z --publish --yes --issue <issue>`.
+7. If npm 2FA blocks publish, recover by having the maintainer refresh browser/Security Key auth with `npm login --auth-type=web`, verify `npm whoami`, then resume from the exact remaining release step.
+8. Verify npm latest, GitHub Release, tag, and public install smoke.
+9. Comment final evidence on the Release Checklist Issue and release PR.
+10. Close the Release Checklist Issue only after the Closure Standard is satisfied.
 
 ## Closure Standard
 

@@ -58,7 +58,7 @@ mustRun("npm", ["run", "release:check"]);
 info("Publishing release artifacts");
 mustRun("git", ["tag", "-a", tag, "-m", tag]);
 mustRun("git", ["push", "origin", tag]);
-mustRun("npm", ["publish", "--access", "public", "--auth-type", "web"]);
+mustRun("npm", ["publish", "--access", "public"]);
 mustRun("gh", ["release", "create", tag, "--verify-tag", "--title", tag, "--notes-file", notesFile]);
 
 const publicVersion = mustPreflight("npm", ["view", packageName, "version"]).stdout.trim();
