@@ -21,8 +21,9 @@ interface XPost {
 export function createXFetchAdapter(options: XFetchAdapterOptions = {}): FetchAdapter {
   return {
     name: "x",
+    readiness: "live-capable",
     async fetch(source: Source, context: FetchContext): Promise<SourceItem[]> {
-      const posts = await readXPosts(source.target, options.fetchImpl);
+      const posts = await readXPosts(source.target, options.fetchImpl, context.signal);
 
       return posts.filter(shouldKeepPost).map((post) =>
         createSourceItem({
@@ -47,10 +48,10 @@ export function createXFetchAdapter(options: XFetchAdapterOptions = {}): FetchAd
 
 export const xFetchAdapter = createXFetchAdapter();
 
-async function readXPosts(target: string, fetchImpl: typeof fetch = fetch): Promise<XPost[]> {
+async function readXPosts(target: string, fetchImpl: typeof fetch = fetch, signal?: AbortSignal): Promise<XPost[]> {
   const body =
     target.startsWith("http://") || target.startsWith("https://")
-      ? await readRemoteTarget(target, fetchImpl)
+      ? await readRemoteTarget(target, fetchImpl, signal)
       : await readFile(target, "utf8");
   const parsed = JSON.parse(body) as unknown;
   const posts = isRecord(parsed) && Array.isArray(parsed.posts) ? parsed.posts : Array.isArray(parsed) ? parsed : undefined;
@@ -62,14 +63,30 @@ async function readXPosts(target: string, fetchImpl: typeof fetch = fetch): Prom
   return posts.map(parseXPost);
 }
 
-async function readRemoteTarget(target: string, fetchImpl: typeof fetch): Promise<string> {
-  const response = await fetchImpl(target);
+async function readRemoteTarget(target: string, fetchImpl: typeof fetch, signal?: AbortSignal): Promise<string> {
+  if (isXProfileTarget(target)) {
+    throw new Error("X live profile fetching requires the X API profile adapter planned in Goal Issue #48");
+  }
+
+  const response = await fetchImpl(target, signal ? { signal } : undefined);
 
   if (!response.ok) {
     throw new Error(`X target returned ${response.status}`);
   }
 
   return response.text();
+}
+
+function isXProfileTarget(target: string): boolean {
+  try {
+    const url = new URL(target);
+    const host = url.hostname.replace(/^www\./, "");
+    const segments = url.pathname.split("/").filter(Boolean);
+
+    return (host === "x.com" || host === "twitter.com") && segments.length === 1;
+  } catch {
+    return false;
+  }
 }
 
 function parseXPost(value: unknown): XPost {

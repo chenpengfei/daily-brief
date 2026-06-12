@@ -21,6 +21,7 @@ describe("workflow CLI commands", () => {
     expect(output.join("\n")).toContain("status  Show Daily Brief Run Status for today");
     expect(output.join("\n")).toContain("config  Show the read-only Daily Brief Configuration Summary");
     expect(output.join("\n")).toContain("daily-brief sources list");
+    expect(output.join("\n")).toContain("daily-brief adapters probe");
     expect(output.join("\n")).toContain("daily-brief version");
     expect(output.join("\n")).not.toContain("daily-brief collect");
     expect(output.join("\n")).not.toContain("daily-brief generate");

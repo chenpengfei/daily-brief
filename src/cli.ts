@@ -30,6 +30,7 @@ import {
   writeModelConfig,
   type DailyBriefModelConfig
 } from "./config/index.js";
+import { formatAdapterProbeReport, probeAdapters } from "./collection/index.js";
 import { getOperationalStatus } from "./workflow/index.js";
 
 type OperationalStatusReport = Awaited<ReturnType<typeof getOperationalStatus>>;
@@ -140,6 +141,12 @@ export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv 
   if (command === "sources") {
     const options = optionsFromEnv(env);
     await handleSourcesCommand(subcommand, value, io, options.sourceRegistryPath);
+    return;
+  }
+
+  if (command === "adapters") {
+    const options = optionsFromEnv(env);
+    await handleAdaptersCommand(args.slice(1), io, options.sourceRegistryPath);
     return;
   }
 
@@ -552,6 +559,39 @@ async function handleSourcesCommand(
   throw new Error(`Unknown sources command: ${subcommand ?? "(missing)"}`);
 }
 
+async function handleAdaptersCommand(args: string[], io: CliIo, sourceRegistryPath: string | undefined): Promise<void> {
+  const [subcommand, ...rest] = args;
+
+  if (subcommand !== "probe") {
+    throw new Error(`Unknown adapters command: ${subcommand ?? "(missing)"}`);
+  }
+
+  const flags = parseFlags(rest);
+  const allowedFlags = new Set(["include-disabled"]);
+  const unknownFlags = Object.keys(flags).filter((flag) => !allowedFlags.has(flag));
+
+  if (unknownFlags.length > 0 || rest.some((arg) => !arg.startsWith("--"))) {
+    throw new Error("daily-brief adapters probe only accepts --include-disabled.");
+  }
+
+  const result = await probeAdapters({
+    ...(sourceRegistryPath ? { sourceRegistryPath } : {}),
+    includeDisabled: flags["include-disabled"] === "true",
+    onProgress(line) {
+      io.stdout(line);
+    }
+  });
+
+  io.stdout("");
+  for (const line of formatAdapterProbeReport(result)) {
+    io.stdout(line);
+  }
+
+  if (!result.releaseReady) {
+    throw new Error("Live Adapter Probe failed release readiness checks.");
+  }
+}
+
 function printHelp(io: CliIo): void {
   io.stdout(
     [
@@ -567,6 +607,7 @@ function printHelp(io: CliIo): void {
       "  daily-brief sources validate",
       "  daily-brief sources enable <source-id>",
       "  daily-brief sources disable <source-id>",
+      "  daily-brief adapters probe [--include-disabled]",
       "  daily-brief version",
       "",
       "Commands:",
