@@ -197,6 +197,62 @@ describe("adapter probe CLI command", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("does not let an X remote JSON HTTP target satisfy live readiness", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-probe-x-remote-json-"));
+    const output: string[] = [];
+    const requests: URL[] = [];
+
+    try {
+      await writeFile(
+        join(directory, "sources.yaml"),
+        [
+          "sources:",
+          "  - id: x-remote-json",
+          "    platform: x",
+          "    adapter: x",
+          "    target: https://x.example/mock/account/example",
+          "    enabled: true",
+          "    notes: Mocked X remote JSON target"
+        ].join("\n"),
+        "utf8"
+      );
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        requests.push(url);
+
+        return jsonResponse({
+          posts: [
+            {
+              id: "remote-1",
+              url: "https://x.example/mock/account/example/status/remote-1",
+              text: "Remote JSON X fixture item.",
+              author: "@example",
+              createdAt: "2026-06-12T05:00:00.000Z"
+            }
+          ]
+        });
+      });
+
+      await expect(
+        runCli(["adapters", "probe"], captureOutput(output), {
+          DAILY_BRIEF_HOME: directory,
+          DAILY_BRIEF_DATA_HOME: join(directory, "data")
+        })
+      ).rejects.toThrow("Live Adapter Probe failed release readiness checks.");
+
+      const text = output.join("\n");
+      expect(requests.map((url) => url.toString())).toEqual(["https://x.example/mock/account/example"]);
+      expect(text).toContain("Probing Source x-remote-json (x, enabled, local)");
+      expect(text).toContain("Source x-remote-json succeeded: 1 item(s)");
+      expect(text).toContain("Release readiness: blocked");
+      expect(text).toContain("No live Source probes selected; local or fixture evidence cannot satisfy live readiness");
+      expect(text).toContain("Adapter x: live-capable adapter has no successful non-empty live Source probe");
+    } finally {
+      vi.unstubAllGlobals();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 function captureOutput(output: string[]) {

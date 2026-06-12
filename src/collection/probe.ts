@@ -240,8 +240,8 @@ function classifyProbeEvidence(source: Source, adapterName: string | undefined):
     return "local";
   }
 
-  if (adapterName === "x" && isXProfileProbeTarget(source.target)) {
-    return "live";
+  if (adapterName === "x") {
+    return isXProfileProbeTarget(source.target) ? "live" : "local";
   }
 
   return source.target.startsWith("http://") || source.target.startsWith("https://") ? "live" : "local";
