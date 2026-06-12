@@ -1,0 +1,7 @@
+# Use Explicit Live Adapter Probes
+
+Fetch Adapter readiness will be verified through an explicit `daily-brief adapters probe` command rather than default unit tests, normal collection, or CI-only checks. The command reads the user's local Source Registry, probes enabled Sources serially with per-Source progress and timeout output, remains dry-run only, does not write Source Item Store or Agent Run Artifacts, continues after individual Source failures, and reports overall failure through its summary and exit code; fixture Sources may be probed locally but do not count as live readiness evidence.
+
+For X profile Sources, the live path is X API v2 with a Bearer Token stored as an `api-key` credential in the Credential Store, defaulting to `x.default`, instead of scraping `x.com` pages. This keeps Source Registry entries stable while avoiding brittle browser scraping, login-wall behavior, and hidden concrete tool details in Source configuration.
+
+Live Adapter Probe is a mandatory local release check because adapter correctness depends on the current external network and the maintainer's real Source Registry. If it fails during release preparation, the release fails until a human works with an Agent to diagnose whether the cause is product behavior, credential readiness, source configuration, or external platform availability; probe output should not be submitted as release evidence because it may expose the maintainer's personal Source ids, Source Targets, credential references, or item samples.

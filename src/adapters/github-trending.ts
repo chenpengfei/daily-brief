@@ -23,8 +23,9 @@ interface GitHubRepoCandidate {
 export function createGitHubTrendingFetchAdapter(options: GitHubTrendingFetchAdapterOptions = {}): FetchAdapter {
   return {
     name: "github-trending",
+    readiness: "live-capable",
     async fetch(source: Source, context: FetchContext): Promise<SourceItem[]> {
-      const candidates = await readGitHubCandidates(source.target, options.fetchImpl);
+      const candidates = await readGitHubCandidates(source.target, options.fetchImpl, context.signal);
       const observedForDate = (context.collectionDate ?? context.fetchedAt).toISOString().slice(0, 10);
       const trendingRange = readTrendingRange(source.target);
 
@@ -62,10 +63,11 @@ export const githubTrendingFetchAdapter = createGitHubTrendingFetchAdapter();
 
 async function readGitHubCandidates(
   target: string,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  signal?: AbortSignal
 ): Promise<GitHubRepoCandidate[]> {
   if (target.startsWith("http://") || target.startsWith("https://")) {
-    const response = await fetchImpl(target);
+    const response = await fetchImpl(target, signal ? { signal } : undefined);
 
     if (!response.ok) {
       throw new Error(`GitHub target returned ${response.status}`);

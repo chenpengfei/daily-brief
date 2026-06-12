@@ -17,6 +17,7 @@ interface FixtureFile {
 
 export const fixtureFetchAdapter: FetchAdapter = {
   name: "fixture",
+  readiness: "local-only",
   async fetch(source: Source, context: FetchContext): Promise<SourceItem[]> {
     const contents = await readFile(source.target, "utf8");
     const fixture = parseFixtureFile(JSON.parse(contents));

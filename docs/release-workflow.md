@@ -34,6 +34,7 @@ The Agent must:
 - Run `npm run release:check`.
 - Run `npm run release:publish:dry-run`.
 - Run the isolated Release Install Smoke Test.
+- Run the Live Adapter Probe locally against the maintainer's real Source Registry.
 - Record command evidence and any Release Blockers in the Release Checklist Issue and Release Pull Request.
 
 The Release Check Command runs:
@@ -66,6 +67,14 @@ DAILY_BRIEF_DATA_HOME=/tmp/daily-brief-data \
 
 Use a unique temporary directory for real runs. Do not install into the maintainer's real global npm prefix or real `~/.daily-brief` during the smoke test.
 
+The Live Adapter Probe must run locally against the maintainer's real Daily Brief configuration:
+
+```bash
+daily-brief adapters probe
+```
+
+Live Adapter Probe is mandatory because Fetch Adapter readiness depends on current external network behavior and the maintainer's configured Sources. If the probe fails, the release fails until a human works with an Agent to diagnose the cause, such as product behavior, credential readiness, source configuration, or external platform availability. Do not submit probe output as release evidence because it may expose personal Source ids, Source Targets, credential references, or item samples; record only whether the mandatory local probe passed or blocked release.
+
 If a product-code blocker appears, stop the release preparation and classify it:
 
 - If the blocker is not required to prove this release's installability or publishability, record the blocker, create or link the fix issue, and restart this gate after the fix is merged.
@@ -88,6 +97,7 @@ The reviewing Agent must use a review stance and inspect:
 - Release CI Workflow result.
 - Local evidence for `npm run release:check`.
 - Local evidence for the Release Install Smoke Test.
+- Confirmation that the mandatory local Live Adapter Probe passed or blocked release without exposing personal Source details.
 - Any Release-Blocking Fix exception, including affected files, scope justification, targeted tests, smoke evidence, and whether a separate fix PR would be safer before release.
 
 The reviewing Agent should report blocking findings first, with file and line references when possible. It may recommend approval or request fixes, but it must not publish the release or approve its own preparation work.
@@ -166,6 +176,7 @@ If GitHub Release is public but install verification fails, record the incident 
 - [ ] npm run release:check completed
 - [ ] npm run release:publish:dry-run completed
 - [ ] Release Install Smoke Test completed with temporary npm prefix and Daily Brief homes
+- [ ] Live Adapter Probe completed locally against the maintainer's real Source Registry
 - [ ] Release Blockers recorded or confirmed absent
 - [ ] Release-Blocking Fix exceptions recorded or confirmed absent
 
@@ -176,6 +187,7 @@ If GitHub Release is public but install verification fails, record the incident 
 - npm pack output:
 - npm package state before publish:
 - install smoke test:
+- live adapter probe: passed locally / blocked release; output intentionally not submitted
 - Release-Blocking Fix exception:
 - git status:
 - notes:

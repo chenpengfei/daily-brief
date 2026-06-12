@@ -19,8 +19,9 @@ interface ParsedFeedEntry {
 export function createRssFetchAdapter(options: RssFetchAdapterOptions = {}): FetchAdapter {
   return {
     name: "rss",
+    readiness: "live-capable",
     async fetch(source: Source, context: FetchContext): Promise<SourceItem[]> {
-      const feed = await readFeedTarget(source.target, options.fetchImpl);
+      const feed = await readFeedTarget(source.target, options.fetchImpl, context.signal);
       const entries = parseFeedEntries(feed);
 
       return entries.map((entry) =>
@@ -42,9 +43,9 @@ export function createRssFetchAdapter(options: RssFetchAdapterOptions = {}): Fet
 
 export const rssFetchAdapter = createRssFetchAdapter();
 
-async function readFeedTarget(target: string, fetchImpl: typeof fetch = fetch): Promise<string> {
+async function readFeedTarget(target: string, fetchImpl: typeof fetch = fetch, signal?: AbortSignal): Promise<string> {
   if (target.startsWith("http://") || target.startsWith("https://")) {
-    const response = await fetchImpl(target);
+    const response = await fetchImpl(target, signal ? { signal } : undefined);
 
     if (!response.ok) {
       throw new Error(`RSS target returned ${response.status}`);
