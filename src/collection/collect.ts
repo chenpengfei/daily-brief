@@ -1,6 +1,9 @@
 import {
+  anthropicNewsFetchAdapter,
+  claudePlatformReleaseNotesFetchAdapter,
   fixtureFetchAdapter,
   githubTrendingFetchAdapter,
+  openAiNewsFetchAdapter,
   rssFetchAdapter,
   xFetchAdapter,
   type FetchAdapterRegistry
@@ -29,6 +32,7 @@ export interface CollectSourcesOptions {
   dateKey?: string;
   fetchedAt?: Date;
   sourceRegistryPath?: string;
+  authPath?: string;
   sourceItemRoot?: string;
   adapters?: FetchAdapterRegistry;
 }
@@ -69,7 +73,11 @@ export async function collectSources(options: CollectSourcesOptions = {}): Promi
     }
 
     try {
-      const items = await adapter.fetch(source, { fetchedAt, collectionDate: date });
+      const items = await adapter.fetch(source, {
+        fetchedAt,
+        collectionDate: date,
+        ...(options.authPath ? { authPath: options.authPath } : {})
+      });
       const appendResult = await appendSourceItems(items, date, options.sourceItemRoot, options.dateKey);
       storePath = appendResult.path;
       results.push({
@@ -96,8 +104,11 @@ export async function collectSources(options: CollectSourcesOptions = {}): Promi
 
 export function defaultFetchAdapters(): FetchAdapterRegistry {
   return {
+    [anthropicNewsFetchAdapter.name]: anthropicNewsFetchAdapter,
+    [claudePlatformReleaseNotesFetchAdapter.name]: claudePlatformReleaseNotesFetchAdapter,
     [fixtureFetchAdapter.name]: fixtureFetchAdapter,
     [githubTrendingFetchAdapter.name]: githubTrendingFetchAdapter,
+    [openAiNewsFetchAdapter.name]: openAiNewsFetchAdapter,
     [rssFetchAdapter.name]: rssFetchAdapter,
     [xFetchAdapter.name]: xFetchAdapter
   };

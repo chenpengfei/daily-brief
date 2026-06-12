@@ -1,8 +1,9 @@
 import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { runCli } from "../../src/cli.js";
+import { putCredential } from "../../src/config/index.js";
 
 describe("adapter probe CLI command", () => {
   it("probes enabled Sources, prints samples, and stays dry-run", async () => {
@@ -131,6 +132,127 @@ describe("adapter probe CLI command", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("lets a configured X profile Source satisfy live readiness through the real probe command", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-probe-x-"));
+    const output: string[] = [];
+    const requests: URL[] = [];
+
+    try {
+      await writeFile(
+        join(directory, "sources.yaml"),
+        [
+          "sources:",
+          "  - id: x-karpathy",
+          "    platform: x",
+          "    adapter: x",
+          '    target: "@karpathy"',
+          "    enabled: true",
+          "    notes: X profile probe test"
+        ].join("\n"),
+        "utf8"
+      );
+      putCredential("x.default", { type: "api-key", provider: "x", apiKey: "secret-x-token" }, join(directory, "auth.json"));
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        requests.push(url);
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret-x-token");
+
+        if (url.pathname === "/2/users/by/username/karpathy") {
+          return jsonResponse({ data: { id: "user-1", username: "karpathy", name: "Andrej Karpathy" } });
+        }
+
+        if (url.pathname === "/2/users/user-1/tweets") {
+          return jsonResponse({
+            data: [
+              {
+                id: "100",
+                text: "Agent Architecture profile probe item.",
+                author_id: "user-1",
+                created_at: "2026-06-12T05:00:00.000Z"
+              }
+            ],
+            includes: { users: [{ id: "user-1", username: "karpathy" }] }
+          });
+        }
+
+        throw new Error(`Unexpected X API request: ${url.toString()}`);
+      });
+
+      await expect(
+        runCli(["adapters", "probe"], captureOutput(output), {
+          DAILY_BRIEF_HOME: directory,
+          DAILY_BRIEF_DATA_HOME: join(directory, "data")
+        })
+      ).resolves.toBeUndefined();
+
+      const text = output.join("\n");
+      expect(requests).toHaveLength(2);
+      expect(text).toContain("Probing Source x-karpathy (x, enabled, live)");
+      expect(text).toContain("Source x-karpathy succeeded: 1 item(s)");
+      expect(text).toContain("Release readiness: ready");
+      expect(text).not.toContain("secret-x-token");
+    } finally {
+      vi.unstubAllGlobals();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not let an X remote JSON HTTP target satisfy live readiness", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-cli-probe-x-remote-json-"));
+    const output: string[] = [];
+    const requests: URL[] = [];
+
+    try {
+      await writeFile(
+        join(directory, "sources.yaml"),
+        [
+          "sources:",
+          "  - id: x-remote-json",
+          "    platform: x",
+          "    adapter: x",
+          "    target: https://x.example/mock/account/example",
+          "    enabled: true",
+          "    notes: Mocked X remote JSON target"
+        ].join("\n"),
+        "utf8"
+      );
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        requests.push(url);
+
+        return jsonResponse({
+          posts: [
+            {
+              id: "remote-1",
+              url: "https://x.example/mock/account/example/status/remote-1",
+              text: "Remote JSON X fixture item.",
+              author: "@example",
+              createdAt: "2026-06-12T05:00:00.000Z"
+            }
+          ]
+        });
+      });
+
+      await expect(
+        runCli(["adapters", "probe"], captureOutput(output), {
+          DAILY_BRIEF_HOME: directory,
+          DAILY_BRIEF_DATA_HOME: join(directory, "data")
+        })
+      ).rejects.toThrow("Live Adapter Probe failed release readiness checks.");
+
+      const text = output.join("\n");
+      expect(requests.map((url) => url.toString())).toEqual(["https://x.example/mock/account/example"]);
+      expect(text).toContain("Probing Source x-remote-json (x, enabled, local)");
+      expect(text).toContain("Source x-remote-json succeeded: 1 item(s)");
+      expect(text).toContain("Release readiness: blocked");
+      expect(text).toContain("No live Source probes selected; local or fixture evidence cannot satisfy live readiness");
+      expect(text).toContain("Adapter x: live-capable adapter has no successful non-empty live Source probe");
+    } finally {
+      vi.unstubAllGlobals();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 function captureOutput(output: string[]) {
@@ -167,4 +289,11 @@ async function writeFixture(path: string, itemCount: number): Promise<void> {
   });
 
   await writeFile(path, JSON.stringify({ items }), "utf8");
+}
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" }
+  });
 }
