@@ -29,6 +29,7 @@ export interface CollectSourcesOptions {
   dateKey?: string;
   fetchedAt?: Date;
   sourceRegistryPath?: string;
+  authPath?: string;
   sourceItemRoot?: string;
   adapters?: FetchAdapterRegistry;
 }
@@ -69,7 +70,11 @@ export async function collectSources(options: CollectSourcesOptions = {}): Promi
     }
 
     try {
-      const items = await adapter.fetch(source, { fetchedAt, collectionDate: date });
+      const items = await adapter.fetch(source, {
+        fetchedAt,
+        collectionDate: date,
+        ...(options.authPath ? { authPath: options.authPath } : {})
+      });
       const appendResult = await appendSourceItems(items, date, options.sourceItemRoot, options.dateKey);
       storePath = appendResult.path;
       results.push({

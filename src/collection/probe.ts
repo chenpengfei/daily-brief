@@ -45,6 +45,7 @@ export interface AdapterProbeRunResult {
 
 export interface ProbeAdaptersOptions {
   sourceRegistryPath?: string;
+  authPath?: string;
   adapters?: FetchAdapterRegistry;
   includeDisabled?: boolean;
   fetchedAt?: Date;
@@ -83,7 +84,12 @@ export async function probeAdapters(options: ProbeAdaptersOptions = {}): Promise
 
     try {
       const items = await withProbeTimeout(
-        adapter.fetch(source, { fetchedAt, collectionDate, signal: abortController.signal }),
+        adapter.fetch(source, {
+          fetchedAt,
+          collectionDate,
+          signal: abortController.signal,
+          ...(options.authPath ? { authPath: options.authPath } : {})
+        }),
         timeoutMs,
         abortController
       );
@@ -234,7 +240,41 @@ function classifyProbeEvidence(source: Source, adapterName: string | undefined):
     return "local";
   }
 
+  if (adapterName === "x" && isXProfileProbeTarget(source.target)) {
+    return "live";
+  }
+
   return source.target.startsWith("http://") || source.target.startsWith("https://") ? "live" : "local";
+}
+
+function isXProfileProbeTarget(target: string): boolean {
+  const trimmed = target.trim();
+
+  if (trimmed.startsWith("@")) {
+    return isXHandle(trimmed.slice(1));
+  }
+
+  if (isXHandle(trimmed)) {
+    return true;
+  }
+
+  if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+    return false;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    const segments = url.pathname.split("/").filter(Boolean);
+
+    return (host === "x.com" || host === "twitter.com") && segments.length === 1 && !url.search && isXHandle(segments[0] ?? "");
+  } catch {
+    return false;
+  }
+}
+
+function isXHandle(value: string): boolean {
+  return /^[A-Za-z0-9_]{1,15}$/.test(value);
 }
 
 async function withProbeTimeout<T>(
