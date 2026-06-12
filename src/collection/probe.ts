@@ -191,7 +191,7 @@ function summarizeAdapter(
   const blocker =
     readiness === "unknown"
       ? "Fetch Adapter is not registered"
-      : readiness === "live-capable" && liveSources.length > 0 && liveSuccesses.length === 0
+      : readiness === "live-capable" && adapterSources.length > 0 && liveSuccesses.length === 0
         ? "live-capable adapter has no successful non-empty live Source probe"
         : undefined;
   const status: AdapterProbeAdapterStatus = blocker

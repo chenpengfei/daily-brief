@@ -213,6 +213,69 @@ describe("probeAdapters", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("blocks a live-capable adapter with only local evidence even when another adapter has live success", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-probe-mixed-local-"));
+    const registryPath = join(directory, "sources.yaml");
+
+    try {
+      await writeRegistry(registryPath, [
+        sourceYaml("rss-local-file", "rss", join(directory, "rss.xml"), true),
+        sourceYaml("github-live", "github-trending", "https://example.com/trending", true)
+      ]);
+
+      const result = await probeAdapters({
+        sourceRegistryPath: registryPath,
+        adapters: {
+          rss: {
+            name: "rss",
+            readiness: "live-capable",
+            async fetch(source, context) {
+              return [item(source, context.fetchedAt, 1)];
+            }
+          },
+          "github-trending": {
+            name: "github-trending",
+            readiness: "live-capable",
+            async fetch(source, context) {
+              return [item(source, context.fetchedAt, 1)];
+            }
+          }
+        },
+        fetchedAt: new Date("2026-06-12T06:00:00.000Z")
+      });
+
+      expect(result.sources).toMatchObject([
+        { sourceId: "rss-local-file", adapter: "rss", status: "success", evidence: "local", itemCount: 1 },
+        { sourceId: "github-live", adapter: "github-trending", status: "success", evidence: "live", itemCount: 1 }
+      ]);
+      expect(result.adapters).toEqual([
+        expect.objectContaining({
+          adapter: "github-trending",
+          readiness: "live-capable",
+          status: "ready",
+          liveSuccessCount: 1
+        }),
+        expect.objectContaining({
+          adapter: "rss",
+          readiness: "live-capable",
+          status: "blocked",
+          liveSourceCount: 0,
+          liveSuccessCount: 0,
+          blocker: "live-capable adapter has no successful non-empty live Source probe"
+        })
+      ]);
+      expect(result.releaseReady).toBe(false);
+      expect(result.blockers).toContain(
+        "Adapter rss: live-capable adapter has no successful non-empty live Source probe"
+      );
+      expect(result.blockers).not.toContain(
+        "No live Source probes selected; local or fixture evidence cannot satisfy live readiness"
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 async function writeRegistry(path: string, sources: string[]): Promise<void> {
