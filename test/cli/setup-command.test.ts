@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../../src/cli.js";
+import { loadSourceRegistry } from "../../src/config/index.js";
+import type { SourceRegistry } from "../../src/domain/index.js";
 
 describe("setup command", () => {
   it("fails without interactive input support", async () => {
@@ -59,7 +61,9 @@ describe("setup command", () => {
       expect(await readFile(join(home, "config.yaml"), "utf8")).toContain("language: zh");
       expect(await readFile(join(home, "config.yaml"), "utf8")).not.toContain("timezone:");
       expect(await readFile(join(home, "config.yaml"), "utf8")).toContain("provider: openai-codex");
-      expect(await readFile(join(home, "sources.yaml"), "utf8")).toContain("github-trending-daily");
+      const sourceRegistry = await loadSourceRegistry(join(home, "sources.yaml"));
+      expectOfficialSourceDefaults(sourceRegistry);
+      await expect(loadSourceRegistry(join(process.cwd(), "config", "sources.example.yaml"))).resolves.toEqual(sourceRegistry);
       expect(await readFile(join(home, "auth.json"), "utf8")).toContain("\"credentials\": {}");
       expect(output.join("\n")).toContain("Model credential: missing");
       expect(output.join("\n")).toContain("Discord delivery: disabled");
@@ -202,4 +206,30 @@ function promptingOutput(output: string[], answers: string[]) {
       return answers.shift() ?? "";
     }
   };
+}
+
+function expectOfficialSourceDefaults(registry: SourceRegistry): void {
+  const sources = new Map(registry.sources.map((source) => [source.id, source]));
+
+  for (const expected of [
+    { id: "openai-news-product-releases", platform: "openai-news", adapter: "openai-news", enabled: true },
+    { id: "openai-news-engineering", platform: "openai-news", adapter: "openai-news", enabled: true },
+    { id: "openai-news-research", platform: "openai-news", adapter: "openai-news", enabled: true },
+    { id: "openai-news-safety", platform: "openai-news", adapter: "openai-news", enabled: true },
+    { id: "anthropic-news", platform: "anthropic", adapter: "anthropic-news", enabled: true },
+    { id: "anthropic-engineering", platform: "anthropic", adapter: "anthropic-news", enabled: true },
+    {
+      id: "claude-platform-release-notes",
+      platform: "claude-platform",
+      adapter: "claude-platform-release-notes",
+      enabled: true
+    },
+    { id: "claude-code-releases", platform: "github", adapter: "rss", enabled: true },
+    { id: "x-mattpocockuk", platform: "x", adapter: "x", enabled: false },
+    { id: "x-victor207755822", platform: "x", adapter: "x", enabled: false },
+    { id: "x-tianyi", platform: "x", adapter: "x", enabled: false },
+    { id: "x-karpathy", platform: "x", adapter: "x", enabled: false }
+  ]) {
+    expect(sources.get(expected.id)).toMatchObject(expected);
+  }
 }

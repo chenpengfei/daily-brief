@@ -9,6 +9,7 @@ describe("OpenAI News Fetch Adapter", () => {
           [
             "<main>",
             "  <a href=\"/news/product-releases/\">Product category</a>",
+            "  <a href=\"/news/research/\">Research</a>",
             "  <a href=\"/news/codex-for-every-role-tool-and-workflow/\" aria-label=\"Codex for every role, tool, and workflow Product Jun 2, 2026\">Codex for every role, tool, and workflow</a>",
             "  <a href=\"/news/openai-frontier-models-and-codex-are-now-available-on-aws/\">OpenAI frontier models and Codex are now available on AWS Product Jun 1, 2026</a>",
             "  <a href=\"/news/product-releases/?filter=product\">Filter</a>",
@@ -32,6 +33,7 @@ describe("OpenAI News Fetch Adapter", () => {
     );
 
     expect(items).toHaveLength(2);
+    expect(items.map((item) => item.title)).not.toContain("Research");
     expect(items[0]).toMatchObject({
       id: "openai-news-product-releases:ecf09753a13950db",
       sourceId: "openai-news-product-releases",
@@ -130,5 +132,31 @@ describe("OpenAI News Fetch Adapter", () => {
       }
     });
     expect(items[0]?.analyzableText).toContain("Engineering notes about Codex agents.");
+  });
+
+  it("only tries the official OpenAI RSS fallback once when both page and RSS return 403", async () => {
+    const requests: string[] = [];
+    const adapter = createOpenAiNewsFetchAdapter({
+      fetchImpl: async (target) => {
+        requests.push(String(target));
+        return new Response("forbidden", { status: 403 });
+      }
+    });
+
+    await expect(
+      adapter.fetch(
+        {
+          id: "openai-news-engineering",
+          platform: "openai-news",
+          adapter: "openai-news",
+          target: "https://openai.com/news/engineering/",
+          enabled: true,
+          notes: "Official OpenAI Engineering News page"
+        },
+        { fetchedAt: new Date("2026-06-07T06:00:00.000Z") }
+      )
+    ).rejects.toThrow("OpenAI News target returned 403");
+
+    expect(requests).toEqual(["https://openai.com/news/engineering/", "https://openai.com/news/rss.xml"]);
   });
 });

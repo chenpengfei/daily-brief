@@ -78,7 +78,12 @@ export function createOpenAiNewsFetchAdapter(options: OpenAiNewsFetchAdapterOpti
 
 export const openAiNewsFetchAdapter = createOpenAiNewsFetchAdapter();
 
-async function readNewsTarget(target: string, fetchImpl: typeof fetch = fetch, signal?: AbortSignal): Promise<string> {
+async function readNewsTarget(
+  target: string,
+  fetchImpl: typeof fetch = fetch,
+  signal?: AbortSignal,
+  allowRssFallback = true
+): Promise<string> {
   if (target.startsWith("http://") || target.startsWith("https://")) {
     const init: RequestInit = {
       headers: {
@@ -94,8 +99,8 @@ async function readNewsTarget(target: string, fetchImpl: typeof fetch = fetch, s
     });
 
     if (!response.ok) {
-      if (response.status === 403 && isOpenAiNewsPage(target)) {
-        return readNewsTarget("https://openai.com/news/rss.xml", fetchImpl, signal);
+      if (response.status === 403 && allowRssFallback && isOpenAiNewsRssFallbackTarget(target)) {
+        return readNewsTarget("https://openai.com/news/rss.xml", fetchImpl, signal, false);
       }
 
       throw new Error(`OpenAI News target returned ${response.status}`);
@@ -174,6 +179,7 @@ function isOpenAiNewsArticleHref(href: string, targetPath: string): boolean {
     (path.startsWith("/news/") || path.startsWith("/index/")) &&
     path !== "/news" &&
     path !== targetPath &&
+    !isOpenAiNewsCategoryPath(path) &&
     path.split("/").length > 2
   );
 }
@@ -186,7 +192,11 @@ function parseArticleLabel(label: string, url: string): OpenAiNewsArticle | unde
   }
 
   const dateMatch = text.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),\s+(\d{4})\b/);
-  const dateStart = dateMatch?.index;
+  if (!dateMatch) {
+    return undefined;
+  }
+
+  const dateStart = dateMatch.index;
   const beforeDate = dateStart === undefined ? text : text.slice(0, dateStart).trim();
   const category = readTrailingCategory(beforeDate);
   const title = category ? beforeDate.slice(0, -category.length).trim() : beforeDate;
@@ -252,13 +262,26 @@ function openAiArticleCategory(pageCategory: string | undefined): string | undef
   return pageCategory && NEWS_CATEGORIES.has(pageCategory) ? pageCategory : undefined;
 }
 
-function isOpenAiNewsPage(target: string): boolean {
+function isOpenAiNewsRssFallbackTarget(target: string): boolean {
   try {
     const url = new URL(target);
-    return url.hostname === "openai.com" && url.pathname.startsWith("/news/");
+    const path = url.pathname.replace(/\/$/, "");
+    return url.hostname === "openai.com" && path.startsWith("/news/") && path !== "/news/rss.xml";
   } catch {
     return false;
   }
+}
+
+function isOpenAiNewsCategoryPath(path: string): boolean {
+  const slug = path.startsWith("/news/") ? path.slice("/news/".length) : undefined;
+
+  if (!slug || slug.includes("/")) {
+    return false;
+  }
+
+  return [...NEWS_CATEGORIES, "Product Releases"]
+    .map((category) => category.toLowerCase().replace(/\s+/g, "-"))
+    .includes(slug);
 }
 
 function isXmlFeed(value: string): boolean {
