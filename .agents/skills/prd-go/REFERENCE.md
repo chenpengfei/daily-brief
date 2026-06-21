@@ -1,6 +1,6 @@
 # PRD Go Reference
 
-Use these briefs as copyable subagent prompts. The coordinator should pass only the needed identifiers. Evidence is always split: unit tests run in a sandboxed or isolated environment, and end-to-end verification runs in the real local-host environment.
+Use these briefs as copyable subagent prompts. The coordinator should pass only the needed identifiers. Evidence is always split: unit tests run in a sandboxed or isolated environment, and end-to-end verification runs in the real local-host environment. Before any PR is pushed or opened, exactly three local code-review subagents must review the local branch/diff and all P1/P2-or-worse findings must be resolved.
 
 `prd-go` is designed to run immediately after `grill-with-docs`. The handoff should feel like continuation, not a restart: business design, system design, product language, implementation constraints, and hard decisions come from `CONTEXT.md`, relevant ADRs, the user's agreed discussion, concrete scenarios, and explicit non-goals.
 
@@ -112,11 +112,96 @@ Run and record both required verification tracks:
 - Unit tests: run in a sandboxed or isolated environment, using isolated fixtures/temp homes when the repo supports them.
 - End-to-end verification: run in the real local-host environment. If credentials, local services, host state, or browser access are needed, request the smallest exact human setup action only when blocked.
 
-Do not open the PR until both tracks are either passing or the real local-host track is blocked on a documented human action.
+Do not push the branch or open the PR. Do not proceed to PR submission until both tracks are either passing or the real local-host track is blocked on a documented human action, and the local pre-PR code-review gate has passed.
 
-Commit, push, and open a PR. PR title may be English. PR body should link the Goal Issue without accidental auto-close unless the repo convention requires auto-close. Include Chinese evidence summary in the PR body or comment.
+Create local commits when the implementation is ready for review. Leave the branch local for the pre-PR code-review gate.
 
-Return branch, commit SHA, PR URL, sandboxed unit-test commands/results, real local-host end-to-end commands/results, and blockers.
+Return branch, base branch, local commit SHA, diff summary, sandboxed unit-test commands/results, real local-host end-to-end commands/results, and blockers.
+```
+
+## Pre-PR Local Code Review Gate
+
+Run exactly three local code-review subagents in parallel when possible. They review the local branch/diff before any push or PR creation. Each reviewer must use these severities:
+
+- P0: dangerous correctness, security, data-loss, or destructive-operation risk.
+- P1: blocking regression, missing required behavior, broken user path, or failed required verification.
+- P2: important issue that should be fixed before review, including credible edge-case breakage, meaningful maintainability risk, or insufficient test/evidence coverage.
+- P3: non-blocking improvement, nit, or follow-up.
+
+The gate passes only when all three reviewers return `pass` and no P0/P1/P2 finding remains unresolved. P3 findings may be deferred if documented with rationale. If a finding is reclassified instead of fixed, the next local review must cite evidence for the reclassification.
+
+```text
+You are the Local Standards Code Reviewer for PRD Go.
+
+Inputs:
+- Goal Issue: <url or number>
+- Local branch: <branch>
+- Base branch: <base>
+- Implementation summary and evidence: <summary>
+
+Review the local diff only; no GitHub PR exists yet. Check AGENTS.md, docs/agents/domain.md, ADRs, repo style, lint/type/test conventions, and architectural boundaries. Do not fix code. Report pass/fail, P0-P3 findings with file/line references where possible, evidence inspected, and exact fixes required for every P0/P1/P2.
+```
+
+```text
+You are the Local Spec Code Reviewer for PRD Go.
+
+Inputs:
+- Goal Issue: <url or number>
+- Parent PRD: <url or identifier>
+- Local branch: <branch>
+- Base branch: <base>
+- Implementation summary and evidence: <summary>
+
+Review the local diff only; no GitHub PR exists yet. Check the Goal Issue, parent PRD, protected non-goals, domain vocabulary, and concrete scenarios. Do not fix code. Report pass/fail, P0-P3 findings with file/line references where possible, missing requirements, scope creep, behavior mismatches, and exact fixes required for every P0/P1/P2.
+```
+
+```text
+You are the Local Risk and Test Code Reviewer for PRD Go.
+
+Inputs:
+- Goal Issue: <url or number>
+- Local branch: <branch>
+- Base branch: <base>
+- Unit-test and end-to-end evidence: <commands/results>
+
+Review the local diff only; no GitHub PR exists yet. Look for regressions, brittle edge cases, unsafe state transitions, inadequate tests, weak error handling, and gaps between code and evidence. Re-run focused local checks when useful. Do not fix code. Report pass/fail, P0-P3 findings with file/line references where possible, evidence inspected, commands run, and exact fixes required for every P0/P1/P2.
+```
+
+## Local Repair Subagent
+
+Brief:
+
+```text
+Repair the local branch for pre-PR review round <n>.
+
+Inputs:
+- Goal Issue: <url or number>
+- Local branch: <branch>
+- Base branch: <base>
+- Local review findings: <three reviewer outputs>
+
+Fix every P0/P1/P2 finding or provide evidence showing why it should be reclassified. Preserve unrelated human changes. Re-run affected sandboxed unit tests and real local-host end-to-end verification when behavior or evidence changes. Create local commits for the repair, but do not push and do not open a PR.
+
+Return commits created, commands run, evidence, unresolved findings, and whether another local review round is needed.
+```
+
+## PR Submission Subagent
+
+Brief:
+
+```text
+Submit the reviewed branch as a PR.
+
+Inputs:
+- Goal Issue: <url or number>
+- Local branch: <branch>
+- Base branch: <base>
+- Passing local pre-PR review evidence: <three reviewer outputs and repair summary>
+- Unit-test and end-to-end evidence: <commands/results>
+
+Verify the local pre-PR gate passed with no unresolved P0/P1/P2 findings. If it did not pass, stop without pushing or opening a PR. Otherwise push the branch and open a PR. PR title may be English. PR body should link the Goal Issue without accidental auto-close unless the repo convention requires auto-close. Include a Chinese evidence summary and mention the passing local pre-PR review gate.
+
+Return branch, commit SHA, PR URL, local review evidence summary, sandboxed unit-test commands/results, real local-host end-to-end commands/results, and blockers.
 ```
 
 ## Review Round Subagents
@@ -181,11 +266,12 @@ Return final PR URL, status, checks, linked issue, and any human next step.
 
 ## Loop Rules
 
-1. Round 1 starts after the first PR is opened.
-2. A round passes only when Standards, Spec, and Evidence reviews all return `pass`, or all remaining findings are explicitly non-blocking and documented in GitHub. Evidence review cannot pass unless sandboxed unit-test evidence and real local-host end-to-end evidence are both present and acceptable.
-3. If any blocking finding exists, publish the review, run Repair, then start the next round.
-4. Stop after round 3 even if repair seems possible.
-5. On stop, publish a Chinese blocker comment on the PR with unresolved findings, evidence state, and the exact human decision needed.
+1. Local pre-PR round 1 starts after the Implementation subagent has local commits and evidence. If any local reviewer reports P0/P1/P2, run Local Repair and repeat local review. Stop before PR submission after local round 3 if P0/P1/P2 remains, then ask the human for direction.
+2. Post-PR round 1 starts after the first PR is opened.
+3. A post-PR round passes only when Standards, Spec, and Evidence reviews all return `pass`, or all remaining findings are explicitly non-blocking and documented in GitHub. Evidence review cannot pass unless sandboxed unit-test evidence and real local-host end-to-end evidence are both present and acceptable.
+4. If any post-PR blocking finding exists, publish the review, run Repair, then start the next post-PR round.
+5. Stop after post-PR round 3 even if repair seems possible.
+6. On stop, publish a Chinese blocker comment on the PR with unresolved findings, evidence state, and the exact human decision needed.
 
 ## Human Assistance Pattern
 
