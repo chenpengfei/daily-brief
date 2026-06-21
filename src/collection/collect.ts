@@ -1,9 +1,6 @@
 import {
-  anthropicNewsFetchAdapter,
-  claudePlatformReleaseNotesFetchAdapter,
   fixtureFetchAdapter,
   githubTrendingFetchAdapter,
-  openAiNewsFetchAdapter,
   rssFetchAdapter,
   xFetchAdapter,
   type FetchAdapterRegistry
@@ -104,11 +101,8 @@ export async function collectSources(options: CollectSourcesOptions = {}): Promi
 
 export function defaultFetchAdapters(): FetchAdapterRegistry {
   return {
-    [anthropicNewsFetchAdapter.name]: anthropicNewsFetchAdapter,
-    [claudePlatformReleaseNotesFetchAdapter.name]: claudePlatformReleaseNotesFetchAdapter,
     [fixtureFetchAdapter.name]: fixtureFetchAdapter,
     [githubTrendingFetchAdapter.name]: githubTrendingFetchAdapter,
-    [openAiNewsFetchAdapter.name]: openAiNewsFetchAdapter,
     [rssFetchAdapter.name]: rssFetchAdapter,
     [xFetchAdapter.name]: xFetchAdapter
   };
