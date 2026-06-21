@@ -146,7 +146,10 @@ export async function runCli(args: string[], io: CliIo = consoleIo, env: CliEnv 
 
   if (command === "adapters") {
     const options = optionsFromEnv(env);
-    await handleAdaptersCommand(args.slice(1), io, options.sourceRegistryPath);
+    await handleAdaptersCommand(args.slice(1), io, {
+      sourceRegistryPath: options.sourceRegistryPath,
+      authPath: options.authPath
+    });
     return;
   }
 
@@ -559,7 +562,11 @@ async function handleSourcesCommand(
   throw new Error(`Unknown sources command: ${subcommand ?? "(missing)"}`);
 }
 
-async function handleAdaptersCommand(args: string[], io: CliIo, sourceRegistryPath: string | undefined): Promise<void> {
+async function handleAdaptersCommand(
+  args: string[],
+  io: CliIo,
+  paths: { sourceRegistryPath?: string; authPath?: string }
+): Promise<void> {
   const [subcommand, ...rest] = args;
 
   if (subcommand !== "probe") {
@@ -575,7 +582,8 @@ async function handleAdaptersCommand(args: string[], io: CliIo, sourceRegistryPa
   }
 
   const result = await probeAdapters({
-    ...(sourceRegistryPath ? { sourceRegistryPath } : {}),
+    ...(paths.sourceRegistryPath ? { sourceRegistryPath: paths.sourceRegistryPath } : {}),
+    ...(paths.authPath ? { authPath: paths.authPath } : {}),
     includeDisabled: flags["include-disabled"] === "true",
     onProgress(line) {
       io.stdout(line);

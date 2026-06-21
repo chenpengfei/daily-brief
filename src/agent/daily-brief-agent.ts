@@ -25,6 +25,7 @@ export interface RunOnceOptions {
   date?: Date;
   dateKey?: string;
   sourceRegistryPath?: string;
+  authPath?: string;
   archiveRoot?: string;
   agentRunRoot?: string;
   sourceItemRoot?: string;
@@ -74,6 +75,7 @@ export async function runOnce(options: RunOnceOptions = {}): Promise<RunOnceResu
       ...(dateKey ? { dateKey } : {}),
       fetchedAt: date,
       ...(options.sourceRegistryPath ? { sourceRegistryPath: options.sourceRegistryPath } : {}),
+      ...(options.authPath ? { authPath: options.authPath } : {}),
       ...(options.sourceItemRoot ? { sourceItemRoot: options.sourceItemRoot } : {})
     });
     for (const source of collection.sources) {

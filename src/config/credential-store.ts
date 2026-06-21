@@ -5,10 +5,11 @@ import type { ConfiguredModelProvider } from "./model-config.js";
 import { resolveDailyBriefPaths } from "./paths.js";
 
 export type CredentialRecord = ApiKeyCredentialRecord | OAuthCredentialRecord | WebhookCredentialRecord;
+export type ApiKeyCredentialProvider = ConfiguredModelProvider | "x";
 
 export interface ApiKeyCredentialRecord {
   type: "api-key";
-  provider: ConfiguredModelProvider;
+  provider: ApiKeyCredentialProvider;
   apiKey: string;
   createdAt?: string;
   updatedAt?: string;
@@ -141,7 +142,7 @@ function parseCredentialStore(value: Record<string, unknown>): CredentialStore {
 
 function parseCredentialRecord(ref: string, value: Record<string, unknown>): CredentialRecord {
   if (value.type === "api-key") {
-    const provider = readProvider(value.provider, ref);
+    const provider = readApiKeyProvider(value.provider, ref);
     const apiKey = readString(value.apiKey, `Credential ${ref} apiKey`);
 
     return {
@@ -217,6 +218,16 @@ function readProvider(value: unknown, ref: string): ConfiguredModelProvider {
   }
 
   throw new Error(`Credential ${ref} has unsupported provider: ${provider}`);
+}
+
+function readApiKeyProvider(value: unknown, ref: string): ApiKeyCredentialProvider {
+  const provider = readString(value, `Credential ${ref} provider`).toLowerCase();
+
+  if (provider === "x") {
+    return provider;
+  }
+
+  return readProvider(provider, ref);
 }
 
 function readTimestamps(value: Record<string, unknown>): Pick<CredentialRecord, "createdAt" | "updatedAt"> {

@@ -214,6 +214,52 @@ describe("probeAdapters", () => {
     }
   });
 
+  it("does not count X remote JSON HTTP targets as live readiness evidence", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-probe-x-remote-json-"));
+    const registryPath = join(directory, "sources.yaml");
+
+    try {
+      await writeRegistry(registryPath, [
+        sourceYaml("x-remote-json", "x", "https://x.example/mock/account/example", true)
+      ]);
+
+      const result = await probeAdapters({
+        sourceRegistryPath: registryPath,
+        adapters: {
+          x: {
+            name: "x",
+            readiness: "live-capable",
+            async fetch(source, context) {
+              return [item(source, context.fetchedAt, 1)];
+            }
+          }
+        },
+        fetchedAt: new Date("2026-06-12T06:00:00.000Z")
+      });
+
+      expect(result.sources[0]).toMatchObject({
+        sourceId: "x-remote-json",
+        adapter: "x",
+        status: "success",
+        evidence: "local",
+        itemCount: 1
+      });
+      expect(result.adapters[0]).toMatchObject({
+        adapter: "x",
+        readiness: "live-capable",
+        status: "blocked",
+        liveSourceCount: 0,
+        liveSuccessCount: 0,
+        blocker: "live-capable adapter has no successful non-empty live Source probe"
+      });
+      expect(result.releaseReady).toBe(false);
+      expect(result.blockers).toContain("No live Source probes selected; local or fixture evidence cannot satisfy live readiness");
+      expect(result.blockers).toContain("Adapter x: live-capable adapter has no successful non-empty live Source probe");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("blocks a live-capable adapter with only local evidence even when another adapter has live success", async () => {
     const directory = await mkdtemp(join(tmpdir(), "daily-brief-probe-mixed-local-"));
     const registryPath = join(directory, "sources.yaml");

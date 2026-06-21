@@ -12,17 +12,20 @@ describe("Daily Brief credential store", () => {
     try {
       putCredential("openai.work", { type: "api-key", provider: "openai", apiKey: "sk-secret" }, authPath);
       putCredential("deepseek.personal", { type: "api-key", provider: "deepseek", apiKey: "deepseek-secret" }, authPath);
+      putCredential("x.default", { type: "api-key", provider: "x", apiKey: "x-secret" }, authPath);
 
       const store = readCredentialStore(authPath);
       const redacted = redactCredentialStore(store);
 
-      expect(Object.keys(store.credentials)).toEqual(["openai.work", "deepseek.personal"]);
+      expect(Object.keys(store.credentials)).toEqual(["openai.work", "deepseek.personal", "x.default"]);
       expect(redacted).toEqual({
         "openai.work": { type: "api-key", provider: "openai", secret: "<redacted>" },
-        "deepseek.personal": { type: "api-key", provider: "deepseek", secret: "<redacted>" }
+        "deepseek.personal": { type: "api-key", provider: "deepseek", secret: "<redacted>" },
+        "x.default": { type: "api-key", provider: "x", secret: "<redacted>" }
       });
       expect(JSON.stringify(redacted)).not.toContain("sk-secret");
       expect(JSON.stringify(redacted)).not.toContain("deepseek-secret");
+      expect(JSON.stringify(redacted)).not.toContain("x-secret");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

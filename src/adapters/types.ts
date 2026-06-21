@@ -4,6 +4,7 @@ export interface FetchContext {
   fetchedAt: Date;
   collectionDate?: Date;
   signal?: AbortSignal;
+  authPath?: string;
 }
 
 export type FetchAdapterReadiness = "local-only" | "live-capable";
