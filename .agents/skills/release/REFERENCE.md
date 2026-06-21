@@ -17,6 +17,38 @@ Useful issue docs:
 - `docs/agents/issue-tracker.md`
 - `docs/agents/goal-issues.md`
 
+## Same-Environment Authentication Guard
+
+GitHub CLI, Git HTTPS credentials, npm tokens, browser sessions, and Security Key prompts are scoped to the environment running the command. A maintainer can be logged in on the host terminal while the agent sandbox still has an invalid or missing token. Always verify auth from the exact shell, cwd, `HOME`, and sandbox that will run Gate 3 or recovery commands.
+
+Before Gate 3 publish or any auth recovery, record these probes:
+
+```sh
+gh auth status
+git remote -v
+npm config get userconfig
+npm config get registry
+npm config get auth-type
+npm whoami
+```
+
+Interpretation:
+
+- `gh auth status` must succeed in the agent environment before any release helper can push an HTTPS tag or create a GitHub Release.
+- `npm whoami` must print the publishing account in the agent environment; do not rely on the maintainer's separate terminal.
+- `npm config get userconfig` should show which `.npmrc` this environment is using. If it points at `/Users/<name>/.npmrc`, the sandbox is reading the host npm config, but publish can still require an interactive browser/Security Key challenge.
+- `npm config get auth-type` returning `web` is useful but not sufficient. `npm publish` must still run in an interactive TTY for WebAuthn/Security Key challenges.
+
+If GitHub auth is missing or stale in the agent environment:
+
+```sh
+gh auth logout -h github.com -u <user>
+gh auth login -h github.com -p https -w
+gh auth status
+```
+
+Keep the `gh auth login` command session open and poll it until it prints `Authentication complete`. Do not ask the user to say "continue" based only on host-terminal login output; verify `gh auth status` again in the agent environment.
+
 ## Release State Triage
 
 Use this before showing a gate menu, when the user says "continue", or when the user asks for Gate 2, Gate 3, or recovery without full context.
@@ -148,6 +180,10 @@ Before publishing:
 git switch main
 git pull --ff-only
 git status --short --branch
+gh auth status
+npm config get userconfig
+npm config get auth-type
+npm whoami
 npm view @chenpengfei/daily-brief version dist-tags.latest
 gh release view vX.Y.Z
 git ls-remote --tags origin vX.Y.Z
@@ -162,6 +198,8 @@ Publish only after human confirmation:
 DAILY_BRIEF_HOME=/tmp/daily-brief-release-home-<id> DAILY_BRIEF_DATA_HOME=/tmp/daily-brief-release-data-<id> npm run release:human -- --version X.Y.Z --publish --yes --issue <release-checklist-issue-number>
 ```
 
+When running this command through tool automation and `npm config get auth-type` is `web` or the maintainer uses npm Security Keys/WebAuthn, allocate a TTY for the full publish command. Otherwise the helper can push the Git tag and then fail at `npm publish` with `EOTP` because npm cannot display the browser/Security Key challenge.
+
 Before running the publish command, state the exact command and require an explicit human confirmation such as `confirm publish vX.Y.Z`. A generic `continue` is enough for preflight and recovery checks, but not enough for the irreversible publish step.
 
 If npm authentication is missing, expired, or likely to require a Security Key/browser flow, have the maintainer run and verify the official login flow before publication:
@@ -170,6 +208,8 @@ If npm authentication is missing, expired, or likely to require a Security Key/b
 npm login --auth-type=web
 npm whoami
 ```
+
+Run `npm login --auth-type=web` in the same environment that will publish, preferably with a TTY. If it prints a browser URL, keep the command running while the maintainer completes the flow; then verify `npm whoami` in the same environment.
 
 Final verification:
 
@@ -216,6 +256,8 @@ npm login --auth-type=web
 npm whoami
 ```
 
+Important: `npm login --auth-type=web` proves login only. Accounts that use Security Keys/WebAuthn can still require a browser challenge during `npm publish`. If a non-interactive publish returns `EOTP`, rerun the publish recovery command in a TTY before asking for an authenticator code.
+
 Record in the Release Checklist Issue:
 
 - the exact auth blocker (`E401`, `EOTP`, expired login, etc.).
@@ -254,24 +296,33 @@ If a Release Checklist Issue was auto-closed by a merged PR before publication:
 
 ## npm 2FA and Security Key Recovery
 
-If `npm publish --access public` fails with `EOTP`, do not rerun the full release script blindly. First determine what completed:
+If `npm publish --access public` fails with `EOTP`, do not assume the account uses authenticator-code OTP. npm can emit `EOTP` when a non-TTY publish cannot show the Security Key/WebAuthn browser flow. Do not rerun the full release script blindly. First determine what completed:
 
 ```sh
 npm view @chenpengfei/daily-brief version dist-tags.latest
 git ls-remote --tags origin vX.Y.Z
 gh release view vX.Y.Z
 git status --short --branch
+npm config get auth-type
+npm whoami
 ```
 
-If the tag was pushed but npm is still on the previous version and GitHub Release is absent, refresh browser/Security Key auth before retrying the documented publish command:
+If the tag was pushed but npm is still on the previous version and GitHub Release is absent, refresh browser/Security Key auth before retrying publish:
 
 ```sh
 npm login --auth-type=web
 npm whoami
+```
+
+Then resume from the exact remaining step. Use an interactive TTY for Security Key/WebAuthn publish:
+
+```sh
 npm publish --access public
 ```
 
-If an npm web login prompt appears, let npm open the browser when possible. If the command prints a login URL, show it to the maintainer and ask them to complete the browser/Security Key flow.
+When running through tool automation, allocate a TTY for this command. If npm prints `Authenticate your account at: https://www.npmjs.com/auth/cli/...` and `Press ENTER to open in the browser...`, show the URL to the maintainer, keep the command session open, send ENTER when appropriate, and poll until it exits. A successful publish prints `+ @chenpengfei/daily-brief@X.Y.Z`.
+
+Only ask the maintainer for an `--otp=<code>` value if the maintainer confirms they use authenticator-code OTP. For Security Key accounts, the correct path is the interactive browser/WebAuthn publish flow.
 
 After npm publish succeeds, continue:
 

@@ -18,3 +18,75 @@ sources:
     target: https://github.com/trending?since=daily
     enabled: true
     notes: Site-wide daily GitHub Trending; Brief generation filters for Agent Architecture and AI Coding signals
+  - id: openai-news-product-releases
+    platform: openai-news
+    adapter: openai-news
+    target: https://openai.com/news/product-releases/
+    enabled: true
+    notes: Official OpenAI Product News page for major product releases and capability updates
+  - id: openai-news-engineering
+    platform: openai-news
+    adapter: openai-news
+    target: https://openai.com/news/engineering/
+    enabled: true
+    notes: Official OpenAI Engineering News page for implementation, infrastructure, and systems articles
+  - id: openai-news-research
+    platform: openai-news
+    adapter: openai-news
+    target: https://openai.com/news/research/
+    enabled: true
+    notes: Official OpenAI Research News page for model, evaluation, and research announcements
+  - id: openai-news-safety
+    platform: openai-news
+    adapter: openai-news
+    target: https://openai.com/news/safety/
+    enabled: true
+    notes: Official OpenAI Safety News page for safety, preparedness, and policy-relevant updates
+  - id: anthropic-news
+    platform: anthropic
+    adapter: anthropic-news
+    target: https://www.anthropic.com/news
+    enabled: true
+    notes: Official Anthropic Newsroom for product, policy, company, and research announcements
+  - id: anthropic-engineering
+    platform: anthropic
+    adapter: anthropic-news
+    target: https://www.anthropic.com/engineering
+    enabled: true
+    notes: Official Anthropic Engineering page for Claude Code, agents, evals, and infrastructure posts
+  - id: claude-platform-release-notes
+    platform: claude-platform
+    adapter: claude-platform-release-notes
+    target: https://platform.claude.com/docs/en/release-notes/overview
+    enabled: true
+    notes: Official Claude Platform release notes for API, SDK, console, model, and platform changes
+  - id: claude-code-releases
+    platform: github
+    adapter: rss
+    target: https://github.com/anthropics/claude-code/releases.atom
+    enabled: true
+    notes: Anthropic Claude Code GitHub Releases Atom feed for CLI and product update tracking
+  - id: x-mattpocockuk
+    platform: x
+    adapter: x
+    target: https://x.com/mattpocockuk
+    enabled: false
+    notes: Matt Pocock X profile; enable after configuring an X API or JSON posts provider for this target
+  - id: x-victor207755822
+    platform: x
+    adapter: x
+    target: https://x.com/victor207755822
+    enabled: false
+    notes: Victor X profile; enable after configuring an X API or JSON posts provider for this target
+  - id: x-tianyi
+    platform: x
+    adapter: x
+    target: https://x.com/tianyi
+    enabled: false
+    notes: Tianyi X profile; enable after configuring an X API or JSON posts provider for this target
+  - id: x-karpathy
+    platform: x
+    adapter: x
+    target: https://x.com/karpathy
+    enabled: false
+    notes: Andrej Karpathy X profile; enable after configuring an X API or JSON posts provider for this target

@@ -44,8 +44,8 @@ _Avoid_: Project config, committed registry, generated artifact store
 The per-user location where an installed Daily Brief Agent stores generated artifacts and local working data, such as Source Item Store entries, Agent Run Artifacts, and Brief Archive entries. User data is separate from configuration so growing generated outputs can be moved, backed up, pruned, or synced without changing Source and provider settings.
 _Avoid_: User Configuration Directory, committed archive, cache-only scratch space
 
-**Model Credential Store**:
-The user-level storage for LLM Provider secrets, Delivery Channel secrets, OAuth tokens, API keys, webhooks, and refreshable credentials used by Agent Stages and delivery. The Model Credential Store is separate from project configuration and Source Registry so credentials are not committed or mixed with collection scope.
+**Credential Store**:
+The user-level storage for LLM Provider secrets, Fetch Adapter secrets, Delivery Channel secrets, OAuth tokens, API keys, webhooks, and refreshable credentials used by Daily Brief operations. The Credential Store is separate from project configuration and Source Registry so credentials are not committed or mixed with collection scope.
 _Avoid_: Source Registry, committed config file, environment variables for secrets, shared Codex CLI auth file
 
 **Structured Agent Output**:
@@ -95,6 +95,14 @@ _Avoid_: Universal URL, Creator, Source ID
 **Fetch Adapter**:
 The collection implementation named by a Source that knows how to fetch Source Items for that Source Target. A Fetch Adapter may internally use official APIs, RSS, open-source scraping tools, browser automation, Codex Computer Use, or manual exports, but those implementation tools are not part of the Source Registry's domain meaning.
 _Avoid_: Source kind, concrete scraper, platform
+
+**Operationally Ready Fetch Adapter**:
+A Fetch Adapter trusted for real Daily Brief operations because it has deterministic fixture evidence and current evidence from at least one configured external Source. Operational readiness does not mean every possible Source Target is guaranteed to succeed, but failures should be explicit and diagnosable.
+_Avoid_: Unit-tested only, best-effort scraper, silent fallback
+
+**Live Source Probe**:
+A configured external Source used to verify that a Fetch Adapter can still collect current Source Items from the real network. A Live Source Probe runs explicitly against the user's local Source Registry, reports progress per Source while it is running, and is a mandatory local release check rather than a replacement for deterministic tests or a promise that the external platform is always available.
+_Avoid_: Fixture, mocked response, production secret
 
 **Focus Area**:
 A top-level subject the Daily Brief Agent prioritizes when judging whether content matters. The current Focus Areas are Agent Architecture, meaning how to construct reliable Agent systems, and AI Coding, meaning how engineers use Coding Agents to build and maintain software.
@@ -153,8 +161,8 @@ The machine-readable working store for collected Source Items, organized as JSON
 _Avoid_: Brief Archive, raw web cache, long-term reading surface
 
 **X Source Item**:
-An original X post or thread from a configured Source. Reposts without added interpretation are not normally Source Items; quote posts and replies may be Source Items when they add relevant perspective.
-_Avoid_: Retweet, engagement event
+An authored X post from a configured Source, including originals, quote posts, and replies when they carry the author's own perspective. Reposts without added interpretation are not normally Source Items, and Focus Area relevance is judged after collection rather than by treating the Fetch Adapter as the main editor.
+_Avoid_: Retweet, engagement event, keyword match
 
 **Blog Source Item**:
 A single article from a configured blog Source. A blog homepage or feed is a Source; an article is the Source Item.
