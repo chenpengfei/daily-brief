@@ -53,6 +53,18 @@ daily-brief sources disable <source-id>
 
 Use `sources validate` after editing the Source Registry.
 
+## Probe Fetch Adapters
+
+Run the explicit Live Adapter Probe after changing Sources or upgrading adapters:
+
+```bash
+daily-brief adapters probe
+```
+
+The probe checks enabled Sources serially, prints progress and bounded samples, and exits unsuccessfully when live-capable Fetch Adapters lack successful non-empty live evidence. It is dry-run only: it does not write the Source Item Store or Agent Run Artifacts.
+
+Probe output can contain Source ids, Source Targets, and item samples. Treat output from a personal Source Registry as private and do not paste it into public release evidence.
+
 ## Configure Model Access
 
 Agent Stages require an LLM Provider Configuration before real Daily Brief generation.
@@ -133,6 +145,15 @@ npm install -g @chenpengfei/daily-brief@latest
 ```
 
 Run `daily-brief setup` again when release notes or config output indicate that configuration needs to be refreshed. Setup preserves existing files by default and asks before replacing non-secret configuration. It does not accept a force-overwrite flag and never deletes generated data.
+
+### Upgrading to v0.2.0
+
+Version 0.2.0 removes X collection support. Before upgrading:
+
+- Remove Sources whose `adapter` is `x` from `~/.daily-brief/sources.yaml`.
+- Remove credentials whose `provider` is `x` from `~/.daily-brief/auth.json`.
+
+Fresh setup includes official OpenAI, Anthropic, Claude Platform, Claude Code Releases, and GitHub Trending Sources. Existing Source Registry files are preserved during setup; review `$(npm root -g)/@chenpengfei/daily-brief/config/sources.example.yaml` if you want to adopt those defaults manually.
 
 ## Troubleshooting
 

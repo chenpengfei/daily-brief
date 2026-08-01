@@ -2,6 +2,30 @@
 
 All notable changes for Formal Releases are recorded here. GitHub Release notes should be derived from the matching version entry.
 
+## 0.2.0 - 2026-08-01
+
+Minor release for explicit live-source readiness checks, broader official-source coverage, and removal of X support.
+
+### User-visible Changes
+
+- Adds `daily-brief adapters probe`, a dry-run command that checks enabled Sources serially, reports per-Source progress and samples, and fails when live-capable Fetch Adapters lack successful non-empty live evidence.
+- Adds live-capable Fetch Adapters for OpenAI News, Anthropic News and Engineering, and Claude Platform release notes; the default Source Registry also includes Claude Code Releases through RSS and keeps GitHub Trending.
+- Removes the X Fetch Adapter, X API credential provider, X-specific probe behavior, and X Sources from fresh setup defaults.
+- Cleans generated build output before packaging so removed adapters cannot remain in the npm package as stale files.
+
+### Installation and Upgrade Notes
+
+- Upgrade with `npm install -g @chenpengfei/daily-brief@latest`.
+- Before upgrading, remove Sources whose `adapter` is `x` from `~/.daily-brief/sources.yaml` and remove credentials whose `provider` is `x` from `~/.daily-brief/auth.json`; X collection is no longer supported.
+- Existing `sources.yaml` files are preserved by `daily-brief setup`. To adopt the new official-source defaults, review `$(npm root -g)/@chenpengfei/daily-brief/config/sources.example.yaml` and copy only the Sources you want to monitor.
+- Run `daily-brief adapters probe` after upgrading to verify current external-source readiness. Probe output can contain Source ids, targets, and item samples, so do not publish output from a personal Source Registry.
+
+### Known Limitations
+
+- X accounts, lists, searches, and posts are not supported Sources in v0.2.0.
+- Live Adapter Probe results depend on current external platform behavior and enabled local Sources; deterministic tests do not replace this check.
+- Live Adapter Probe is an explicit local command and is not run by default during `npm test` or CI.
+
 ## 0.1.4 - 2026-06-06
 
 Patch release for command-surface separation and configuration-first inspection.
