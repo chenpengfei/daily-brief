@@ -4,7 +4,6 @@ description: Run Daily Brief releases through the three human-triggered gates, w
 ---
 
 # Release
-
 Use this skill to drive Daily Brief releases without skipping gates or losing evidence.
 
 ## Quick Start
@@ -36,6 +35,7 @@ See [REFERENCE.md](REFERENCE.md) for command checklists, evidence templates, and
 - Keep Release PRs focused on release materials unless a minimal Release-Blocking Fix is explicitly documented.
 - Published npm versions and GitHub tags are immutable. Recover with follow-up release work, not silent mutation.
 - Prefer existing repo automation, especially `npm run release:check`, `npm run release:publish:dry-run`, and `npm run release:human`; run release checks with temporary `DAILY_BRIEF_HOME` and `DAILY_BRIEF_DATA_HOME` so tests cannot use real user delivery config.
+- Treat GitHub and npm authentication as execution-environment local. A maintainer being logged in on the host terminal does not prove the agent sandbox can push tags, create releases, or publish; verify `gh auth status`, `git` push credentials, `npm whoami`, and npm config in the same environment that will run release commands.
 
 ## Release State Triage
 
@@ -79,11 +79,11 @@ When the user confirms Human Release:
 
 1. Merge or verify the release PR is merged.
 2. Ensure local `main` matches `origin/main`, the working tree is clean, and CI is green on the merged commit.
-3. Run preflight: `npm run release:human -- --version X.Y.Z`.
-4. If preflight blocks on npm authentication (`npm whoami` `E401`, expired login, missing credentials, or 2FA), actively guide the maintainer through npm login before continuing; do not merely say "authenticate npm". See [REFERENCE.md](REFERENCE.md).
+3. Verify same-environment auth readiness for GitHub and npm, then run preflight: `npm run release:human -- --version X.Y.Z`.
+4. If GitHub or npm auth blocks, actively guide the maintainer through same-environment login before continuing; do not merely say "authenticate locally". See [REFERENCE.md](REFERENCE.md).
 5. Before publication, verify browser/Security Key npm auth with `npm login --auth-type=web` when login is missing or expired, then `npm whoami`.
-6. After explicit publish confirmation, run: `npm run release:human -- --version X.Y.Z --publish --yes --issue <issue>`.
-7. If npm 2FA blocks publish, recover by having the maintainer refresh browser/Security Key auth with `npm login --auth-type=web`, verify `npm whoami`, then resume from the exact remaining release step.
+6. After explicit publish confirmation, run `npm run release:human -- --version X.Y.Z --publish --yes --issue <issue>` in a TTY when npm uses browser/Security Key auth.
+7. If npm 2FA/Security Key blocks publish, recover from the exact completed step. Run `npm publish --access public` in an interactive TTY so npm can show the browser/Security Key challenge; non-TTY publish can fail as `EOTP` even when the account uses Security Keys.
 8. Verify npm latest, GitHub Release, tag, and public install smoke.
 9. Comment final evidence on the Release Checklist Issue and release PR.
 10. Close the Release Checklist Issue only after the Closure Standard is satisfied.

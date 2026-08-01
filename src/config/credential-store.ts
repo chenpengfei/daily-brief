@@ -5,7 +5,7 @@ import type { ConfiguredModelProvider } from "./model-config.js";
 import { resolveDailyBriefPaths } from "./paths.js";
 
 export type CredentialRecord = ApiKeyCredentialRecord | OAuthCredentialRecord | WebhookCredentialRecord;
-export type ApiKeyCredentialProvider = ConfiguredModelProvider | "x";
+export type ApiKeyCredentialProvider = ConfiguredModelProvider;
 
 export interface ApiKeyCredentialRecord {
   type: "api-key";
@@ -221,13 +221,7 @@ function readProvider(value: unknown, ref: string): ConfiguredModelProvider {
 }
 
 function readApiKeyProvider(value: unknown, ref: string): ApiKeyCredentialProvider {
-  const provider = readString(value, `Credential ${ref} provider`).toLowerCase();
-
-  if (provider === "x") {
-    return provider;
-  }
-
-  return readProvider(provider, ref);
+  return readProvider(value, ref);
 }
 
 function readTimestamps(value: Record<string, unknown>): Pick<CredentialRecord, "createdAt" | "updatedAt"> {

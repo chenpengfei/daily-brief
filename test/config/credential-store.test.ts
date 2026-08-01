@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -12,20 +12,34 @@ describe("Daily Brief credential store", () => {
     try {
       putCredential("openai.work", { type: "api-key", provider: "openai", apiKey: "sk-secret" }, authPath);
       putCredential("deepseek.personal", { type: "api-key", provider: "deepseek", apiKey: "deepseek-secret" }, authPath);
-      putCredential("x.default", { type: "api-key", provider: "x", apiKey: "x-secret" }, authPath);
 
       const store = readCredentialStore(authPath);
       const redacted = redactCredentialStore(store);
 
-      expect(Object.keys(store.credentials)).toEqual(["openai.work", "deepseek.personal", "x.default"]);
+      expect(Object.keys(store.credentials)).toEqual(["openai.work", "deepseek.personal"]);
       expect(redacted).toEqual({
         "openai.work": { type: "api-key", provider: "openai", secret: "<redacted>" },
-        "deepseek.personal": { type: "api-key", provider: "deepseek", secret: "<redacted>" },
-        "x.default": { type: "api-key", provider: "x", secret: "<redacted>" }
+        "deepseek.personal": { type: "api-key", provider: "deepseek", secret: "<redacted>" }
       });
       expect(JSON.stringify(redacted)).not.toContain("sk-secret");
       expect(JSON.stringify(redacted)).not.toContain("deepseek-secret");
-      expect(JSON.stringify(redacted)).not.toContain("x-secret");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects credentials for unsupported API key providers", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "daily-brief-auth-"));
+    const authPath = join(directory, "auth.json");
+
+    try {
+      await writeFile(
+        authPath,
+        JSON.stringify({ credentials: { "unsupported.default": { type: "api-key", provider: "x", apiKey: "secret" } } }),
+        "utf8"
+      );
+
+      expect(() => readCredentialStore(authPath)).toThrow("Credential unsupported.default has unsupported provider: x");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

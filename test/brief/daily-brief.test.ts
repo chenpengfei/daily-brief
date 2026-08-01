@@ -44,14 +44,14 @@ describe("Daily Brief generation", () => {
       date: new Date("2026-05-28T07:00:00.000Z"),
       sourceItems: [
         sourceItem({ id: "blog:item-1", sourceId: "blog" }),
-        sourceItem({ id: "x:item-1", sourceId: "x" })
+        sourceItem({ id: "rss:item-1", sourceId: "rss" })
       ]
     });
 
     expect(brief.signals).toHaveLength(1);
     expect(brief.signals[0]?.citations.map((citation) => citation.sourceItemId)).toEqual([
       "blog:item-1",
-      "x:item-1"
+      "rss:item-1"
     ]);
   });
 
@@ -103,7 +103,7 @@ describe("Daily Brief generation", () => {
     const brief = generateDailyBrief({
       date: new Date("2026-05-28T07:00:00.000Z"),
       sourceItems: [sourceItem({ id: "blog:item-1" })],
-      partialFailures: ["x-search rate limited"]
+      partialFailures: ["rss feed unavailable"]
     });
     const markdown = renderDailyBriefMarkdown(brief);
 
@@ -112,7 +112,7 @@ describe("Daily Brief generation", () => {
     expect(markdown).toContain("## Top Signals");
     expect(markdown).toContain("## Source Coverage");
     expect(markdown).toContain("## Sources");
-    expect(markdown).toContain("Partial failures: x-search rate limited");
+    expect(markdown).toContain("Partial failures: rss feed unavailable");
     expect(markdown).toContain("- blog:item-1: [Agent runtime state management](https://example.com/agent-runtime)");
     expect(markdown).toContain(
       "- 是什么: 它是一个 Source-grounded Signal：A concrete Agent Architecture note about state, tool execution, and event streaming"
