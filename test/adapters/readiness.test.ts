@@ -5,9 +5,9 @@ import {
   fixtureFetchAdapter,
   githubTrendingFetchAdapter,
   openAiNewsFetchAdapter,
-  rssFetchAdapter,
-  xFetchAdapter
+  rssFetchAdapter
 } from "../../src/adapters/index.js";
+import { defaultFetchAdapters } from "../../src/collection/index.js";
 
 describe("Fetch Adapter readiness metadata", () => {
   it("declares whether each adapter is local-only or live-capable", () => {
@@ -17,16 +17,18 @@ describe("Fetch Adapter readiness metadata", () => {
       [fixtureFetchAdapter.name]: fixtureFetchAdapter.readiness,
       [githubTrendingFetchAdapter.name]: githubTrendingFetchAdapter.readiness,
       [openAiNewsFetchAdapter.name]: openAiNewsFetchAdapter.readiness,
-      [rssFetchAdapter.name]: rssFetchAdapter.readiness,
-      [xFetchAdapter.name]: xFetchAdapter.readiness
+      [rssFetchAdapter.name]: rssFetchAdapter.readiness
     }).toEqual({
       "anthropic-news": "live-capable",
       "claude-platform-release-notes": "live-capable",
       fixture: "local-only",
       "github-trending": "live-capable",
       "openai-news": "live-capable",
-      rss: "live-capable",
-      x: "live-capable"
+      rss: "live-capable"
     });
+  });
+
+  it("does not register the retired X adapter", () => {
+    expect(defaultFetchAdapters()).not.toHaveProperty("x");
   });
 });

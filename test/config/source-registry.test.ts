@@ -84,8 +84,8 @@ describe("Source Registry", () => {
           },
           {
             id: "duplicate",
-            platform: "x",
-            adapter: "x-search",
+            platform: "blog",
+            adapter: "rss",
             target: "agent architecture",
             enabled: true,
             notes: "Second Source"

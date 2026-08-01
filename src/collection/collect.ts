@@ -5,7 +5,6 @@ import {
   githubTrendingFetchAdapter,
   openAiNewsFetchAdapter,
   rssFetchAdapter,
-  xFetchAdapter,
   type FetchAdapterRegistry
 } from "../adapters/index.js";
 import { loadSourceRegistry } from "../config/index.js";
@@ -109,7 +108,6 @@ export function defaultFetchAdapters(): FetchAdapterRegistry {
     [fixtureFetchAdapter.name]: fixtureFetchAdapter,
     [githubTrendingFetchAdapter.name]: githubTrendingFetchAdapter,
     [openAiNewsFetchAdapter.name]: openAiNewsFetchAdapter,
-    [rssFetchAdapter.name]: rssFetchAdapter,
-    [xFetchAdapter.name]: xFetchAdapter
+    [rssFetchAdapter.name]: rssFetchAdapter
   };
 }

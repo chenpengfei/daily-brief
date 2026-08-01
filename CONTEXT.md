@@ -77,11 +77,11 @@ A machine-readable record of one Daily Brief generation run's Agent Stage inputs
 _Avoid_: Brief Archive, Source Item Store, model transcript dump
 
 **Source**:
-A manually defined origin that the Daily Brief Agent is allowed to monitor, such as an X account, blog, GitHub repository or organization, YouTube channel, feed-like endpoint, trend list, topic, or bounded search. The system processes configured Sources; it does not autonomously add new Sources.
+A manually defined origin that the Daily Brief Agent is allowed to monitor, such as a blog, GitHub repository or organization, YouTube channel, feed-like endpoint, trend list, topic, or bounded search. The system processes configured Sources; it does not autonomously add new Sources.
 _Avoid_: Lead, recommendation, discovered account
 
 **Source Platform**:
-The content platform or medium a Source belongs to, such as X, blog, GitHub, or YouTube. Source Platform describes where Source Items come from and supports display, citation, deduplication, and platform policy; it is distinct from Fetch Adapter.
+The content platform or medium a Source belongs to, such as a blog, GitHub, or YouTube. Source Platform describes where Source Items come from and supports display, citation, deduplication, and platform policy; it is distinct from Fetch Adapter.
 _Avoid_: Fetch Adapter, scraper, source target
 
 **Source Registry**:
@@ -89,7 +89,7 @@ The manually maintained list of Sources the Daily Brief Agent is allowed to moni
 _Avoid_: Discovered source list, recommendation list, implicit subscriptions
 
 **Source Target**:
-The adapter-specific locator or query that tells a Fetch Adapter what to collect for a Source. A Source Target may be an X handle, RSS URL, GitHub repository, GitHub search query, trending page, YouTube channel, playlist, or other adapter input.
+The adapter-specific locator or query that tells a Fetch Adapter what to collect for a Source. A Source Target may be an RSS URL, GitHub repository, GitHub search query, trending page, YouTube channel, playlist, or other adapter input.
 _Avoid_: Universal URL, Creator, Source ID
 
 **Fetch Adapter**:
@@ -153,16 +153,12 @@ The line between what the Daily Brief Agent may do on its own and what remains m
 _Avoid_: Full autonomy, source discovery, unattended editorial authority, research hypothesis generation
 
 **Source Item**:
-A collected content unit from a Source, such as an X post, blog post, GitHub release or repository event, or YouTube video. A Source Item should retain a stable id, source id, Source Platform, URL, title or label, author when available, published time when available, fetched time, analyzable text or summary, and content hash, but it should not treat complete external-content mirroring as the default archive strategy. MVP does not model Creators separately; Signals should cite Source Items directly.
+A collected content unit from a Source, such as a blog post, GitHub release or repository event, or YouTube video. A Source Item should retain a stable id, source id, Source Platform, URL, title or label, author when available, published time when available, fetched time, analyzable text or summary, and content hash, but it should not treat complete external-content mirroring as the default archive strategy. MVP does not model Creators separately; Signals should cite Source Items directly.
 _Avoid_: Full mirror, brief, signal
 
 **Source Item Store**:
 The machine-readable working store for collected Source Items, organized as JSONL files under `data/source-items/YYYY/MM/YYYY-MM-DD.jsonl`. The Source Item Store supports deduplication, analysis, debugging, later indexing, replay, and audit of collected-but-not-selected items; it is distinct from the human-readable Brief Archive.
 _Avoid_: Brief Archive, raw web cache, long-term reading surface
-
-**X Source Item**:
-An authored X post from a configured Source, including originals, quote posts, and replies when they carry the author's own perspective. Reposts without added interpretation are not normally Source Items, and Focus Area relevance is judged after collection rather than by treating the Fetch Adapter as the main editor.
-_Avoid_: Retweet, engagement event, keyword match
 
 **Blog Source Item**:
 A single article from a configured blog Source. A blog homepage or feed is a Source; an article is the Source Item.
@@ -328,7 +324,7 @@ _Avoid_: Discord history, transient notification
 
 **Architect**: No. If I want to follow it directly, I add it as a Source myself.
 
-**Developer**: Simon also has an X account and a YouTube channel. Is that one Source?
+**Developer**: Simon also has a blog and a YouTube channel. Is that one Source?
 
 **Architect**: No. Each platform entry is a separate Source; MVP does not model Simon as a separate Creator.
 

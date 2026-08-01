@@ -55,7 +55,7 @@ describe("Source-grounding Audit Stage", () => {
   it("rejects Executive Summary overstatement when Source Coverage has partial failures", async () => {
     await expect(
       runSourceGroundingAuditStage({
-        brief: brief({ executiveSummary: "全部 Sources 完整覆盖，今天有 1 个 Signal。", partialFailures: ["x failed"] }),
+        brief: brief({ executiveSummary: "全部 Sources 完整覆盖，今天有 1 个 Signal。", partialFailures: ["rss failed"] }),
         sourceItems: [sourceItem()],
         artifact: createArtifact(),
         allowRepair: false

@@ -224,12 +224,10 @@ function expectOfficialSourceDefaults(registry: SourceRegistry): void {
       adapter: "claude-platform-release-notes",
       enabled: true
     },
-    { id: "claude-code-releases", platform: "github", adapter: "rss", enabled: true },
-    { id: "x-mattpocockuk", platform: "x", adapter: "x", enabled: false },
-    { id: "x-victor207755822", platform: "x", adapter: "x", enabled: false },
-    { id: "x-tianyi", platform: "x", adapter: "x", enabled: false },
-    { id: "x-karpathy", platform: "x", adapter: "x", enabled: false }
+    { id: "claude-code-releases", platform: "github", adapter: "rss", enabled: true }
   ]) {
     expect(sources.get(expected.id)).toMatchObject(expected);
   }
+
+  expect(registry.sources.some((source) => source.platform === "x" || source.adapter === "x")).toBe(false);
 }
